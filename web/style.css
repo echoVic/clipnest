@@ -13,3 +13,4 @@ dialog{padding:25px;border-radius:17px;border:1px solid var(--line);background:v
 @keyframes appear{from{opacity:0;transform:translateY(4px) scale(.995)}to{opacity:1;transform:none}}@keyframes toast{from{opacity:0;bottom:50px}to{opacity:1;bottom:54px}}
 /* Grid tracks must shrink below intrinsic content so both panes scroll inside. */
 .workspace{grid-template-rows:minmax(0,1fr)}.history,.preview{min-height:0}.entry-title{font-size:12px}.entry-sub{font-size:10px}.tagline{font-size:11px}.list-heading{color:#8c8698}.footer{color:#8c8698}.preview-meta{color:#8c8698}.list:focus-visible{box-shadow:none}.entry.selected:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+:root{color:var(--ink)}
