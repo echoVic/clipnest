@@ -1,0 +1,7 @@
+/build/
+/.mygo/
+/clipnest
+/flux/.local/
+*.test
+.DS_Store
+/log/

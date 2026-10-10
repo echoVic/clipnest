@@ -1,0 +1,8 @@
+{
+  "name": "Clipnest",
+  "identifier": "app.clipnest.desktop",
+  "version": "0.1.0",
+  "frontendDist": "web",
+  "out": "build",
+  "bindings": "bindings.ts"
+}
