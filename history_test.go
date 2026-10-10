@@ -7,6 +7,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -157,5 +158,24 @@ func TestCorruptArchiveIsNotOverwritten(t *testing.T) {
 	b, _ := os.ReadFile(path)
 	if string(b) != "broken" {
 		t.Fatal("corrupt data overwritten")
+	}
+}
+
+func TestEscapedTextRoundTripsWithinContentLimit(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.json")
+	h, _ := openHistory(path)
+	for i := 0; i < 17; i++ {
+		h.Add(entry(t, fmt.Sprintf("%d:%s", i, strings.Repeat("\x00", maxText-32))))
+	}
+	if err := h.Save(); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := openHistory(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := loaded.Snapshot()
+	if len(got) != 17 {
+		t.Fatal("JSON escaping lost valid history")
 	}
 }

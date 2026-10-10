@@ -114,7 +114,9 @@ func openHistory(path string) (*History, error) {
 	}
 	defer f.Close()
 	var a archive
-	decoder := json.NewDecoder(io.LimitReader(f, 48<<20))
+	// JSON escapes can expand a byte of text to six bytes. Allow the full
+	// bounded history to round-trip even when it contains many control chars.
+	decoder := json.NewDecoder(io.LimitReader(f, 256<<20))
 	if err := decoder.Decode(&a); err != nil {
 		return nil, fmt.Errorf("历史文件无法读取：%w", err)
 	}
