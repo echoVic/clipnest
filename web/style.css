@@ -16,3 +16,5 @@ dialog{padding:25px;border-radius:17px;border:1px solid var(--line);background:v
 :root{color:var(--ink)}
 .small-note a{color:var(--accent);text-decoration:none}
 .small-note a:hover{text-decoration:underline}
+/* Phrases page: header view switch, page-only elements, two-line excerpts. */
+.views{display:flex;gap:2px;padding:3px;border:1px solid var(--line);border-radius:9px;background:var(--soft);--app-region:no-drag}.views button{height:25px;padding:0 13px;border-radius:7px;color:var(--muted);font-size:11px;white-space:nowrap}.views button:hover{color:var(--ink)}.views button.active{background:var(--surface);color:var(--accent);font-weight:600;box-shadow:0 1px 2px #20203012}.view-phrases .history-only,.panel:not(.view-phrases) .phrases-only{display:none!important}.entry-excerpt{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere;font-size:12px;line-height:1.55;font-weight:500}@media(max-width:560px){.tagline{display:none}}
