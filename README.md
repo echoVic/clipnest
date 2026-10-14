@@ -39,7 +39,7 @@
 
 macOS 原生功能基于 MyGo、purego、AppKit / ApplicationServices，无 cgo，无 AppleScript 子进程。已支持菜单栏、全局快捷键、剪贴板采集、辅助功能检测、应用激活与粘贴按键。
 
-当前提供 Intel / Apple Silicon 通用预览包，使用临时签名，**未经过 Apple Developer ID 签名和公证**。Mac 系统可能要求在「隐私与安全性」中选择「仍要打开」；如果提示文件损坏且没有该选项，不能视为可直接安装的正式版本。没有附带关闭 Gatekeeper 或修改全局安全设置的脚本。
+当前 Release 提供 Intel / Apple Silicon 通用安装包（需要 macOS 12 或更高版本）。安装包已使用 Apple Developer ID 签名并通过 Apple 公证，下载后可以直接打开，不需要「仍要打开」等额外步骤；SHA-256 校验值见对应 Release 页面。
 
 开发环境为 Linux。Mac 二进制已交叉编译、静态检查；原生 Mac 权限弹窗、跨应用焦点、多显示器与真实粘贴尚未在 Mac 实机验收。浏览器交互演示不等于系统粘贴验证。
 
@@ -53,4 +53,8 @@ Linux / Windows 能编译，桌面版仅提供历史与复制，不自动发送�
 
 验证：`go test ./...`、`go vet ./...`、`node --test web/selection.test.mjs`。Mac 包构建：`go tool mygo build -platform darwin/universal -skip-dmg .`，然后用 `scripts/package-macos.sh` 封装。
 
-正式分发需配置自己的 Developer ID 及 Apple 公证流程。可用 MyGo 的 `macos.signingIdentity`、`macos.notarize` 配置，在 macOS CI 完成。
+正式发布由 `scripts/sign-notarize-macos.sh` 在 macOS 上完成 Developer ID 签名、Apple 公证与 stapling；证书与公证凭据存放在本机钥匙串，不进入仓库。自行分发时请替换为自己的 Developer ID 与公证凭据。
+
+## 许可证
+
+本项目基于 [MIT 许可证](LICENSE) 开源，© 2026 echoVic。
