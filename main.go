@@ -82,7 +82,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	d := &Desktop{h: h, lastRevision: -2, stop: make(chan struct{}), shortcut: "⌘ ⇧ V"}
+	d := &Desktop{h: h, p: openPhrases(filepath.Join(dir, "phrases.json")), lastRevision: -2, stop: make(chan struct{}), shortcut: "⌘ ⇧ V"}
 	mygo.SetFrontend(web)
 	mygo.Bind(d)
 	mygo.App.WhenReady(func() {

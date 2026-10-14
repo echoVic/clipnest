@@ -180,3 +180,29 @@ func TestCorruptPhrasesFileIsReadOnly(t *testing.T) {
 		}
 	}
 }
+func TestPhraseBindingsUseTheStore(t *testing.T) {
+	d := &Desktop{p: openPhrases(filepath.Join(t.TempDir(), "phrases.json"))}
+	saved, err := d.SavePhrase("", "Simple.")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if list, _ := d.Phrases("SIMPLE"); len(list) != 1 || list[0].ID != saved.ID {
+		t.Fatal("Phrases must list the saved phrase")
+	}
+	if got, _ := d.PhraseDetail(saved.ID); got.Text != "Simple." {
+		t.Fatal("PhraseDetail must return the full text")
+	}
+	// The lookup fails before anything touches the clipboard.
+	if _, err := d.InsertPhrase("missing", true); err == nil || err.Error() != "这条常用语已删除" {
+		t.Fatal("inserting a deleted phrase must fail")
+	}
+	if err := d.MovePhrase(saved.ID, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.DeletePhrase(saved.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.PhraseDetail(saved.ID); err == nil {
+		t.Fatal("a deleted phrase is still readable")
+	}
+}
