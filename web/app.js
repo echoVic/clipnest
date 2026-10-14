@@ -14,7 +14,7 @@ const demo = !window.mygo;
 const api = demo ? createDemo() : { call: (method, ...args) => window.mygo.call(`Desktop.${method}`, ...args) };
 if (demo) document.body.classList.add('demo');
 let state = { session: 0, entries: [], paused: false, accessible: false, platform: '', target: '', shortcut: '⌘ ⇧ V' };
-let entries = [], selected = -1, kind = 'all', view = 'history', listError = '', busy = false, queryVersion = 0, detailVersion = 0, queryTimer, toastTimer, queryPending = false;
+let entries = [], selected = -1, kind = 'all', view = 'history', listError = '', draft = null, reordering = false, busy = false, queryVersion = 0, detailVersion = 0, queryTimer, toastTimer, queryPending = false;
 const wheel = new WheelSelection();
 const labels = { text: '文字', link: '链接', code: '代码', image: '图片' };
 const call = (method, ...args) => api.call(method, ...args);
@@ -45,7 +45,7 @@ function showView() {
   $('#list').setAttribute('aria-label', view === 'phrases' ? '常用语' : '复制历史');
 }
 // The search text stays, so a query typed on the wrong page carries over.
-function switchView(next) { if (busy || next === view) return; view = next; showView(); refresh(); }
+function switchView(next) { if (busy || next === view) return; view = next; showView(); refresh(); if (view === 'phrases' && draft) openEditor(); }
 function applyState(next, reopen = false) {
   state = next; header();
   if (reopen) {
@@ -104,6 +104,7 @@ function emptyState(filtered) {
     : view === 'phrases' ? (filtered ? ['没有找到这条常用语', '试试更短的关键词。'] : ['把常用的文字存起来，随时插入', ''])
     : filtered ? ['还没有找到这条内容', '试试更短的关键词，或切换到「全部」。'] : ['复制一下，好内容就留下了', `复制文字或图片后，在这里找回。按 ${state.shortcut} 随时唤起。`];
   $('#empty h2').textContent = title; $('#empty p').textContent = text; $('#empty p').hidden = !text;
+  $('#empty-new').hidden = view !== 'phrases' || filtered || !!listError; $('#new-phrase').disabled = !!listError;
 }
 function select(index) { if (busy || index === selected) return; selected = moveIndex(index, 0, entries.length); selectionChanged(); }
 function selectionChanged() {
@@ -150,7 +151,10 @@ async function phrasePreview(entry, version) {
     const p = await call('PhraseDetail', entry.id);
     if (version !== detailVersion || !p) return;
     $('#preview-body').replaceChildren(node('p', 'preview-text', p.text)); $('#preview-body').scrollTop = 0;
-    $('#preview-meta').replaceChildren(node('span', '', `${[...p.text].length} 个字符`));
+    const edit = node('button', 'icon-button edit-phrase'); edit.title = '编辑（⌘E）'; edit.setAttribute('aria-label', '编辑这条常用语'); edit.append(icon('edit')); edit.onclick = editPhrase;
+    const remove = node('button', 'icon-button delete-entry'); remove.title = '删除这条常用语'; remove.setAttribute('aria-label', '删除这条常用语'); remove.append(icon('trash')); remove.onclick = askDeletePhrase;
+    const actions = node('span', 'meta-actions'); actions.append(edit, remove);
+    $('#preview-meta').replaceChildren(node('span', '', `${[...p.text].length} 个字符`), actions);
   } catch (err) { if (version === detailVersion) toast(message(err)); }
 }
 async function choose(copyOnly) {
@@ -168,6 +172,51 @@ async function choose(copyOnly) {
   } catch (err) { toast(message(err)); if (view === 'phrases') refresh(); }
   finally { busy = false; $('#paste').disabled = $('#copy-only').disabled = entries.length === 0; }
 }
+// The draft outlives the dialog: hiding the panel closes the editor but keeps
+// the text, and returning to the phrases page reopens it.
+function openEditor(next = draft) {
+  draft = next;
+  $('#phrase-editor-title').textContent = draft.id ? '编辑常用语' : '新建常用语';
+  $('#phrase-text').value = draft.text; $('#phrase-error').hidden = true; editorChanged();
+  if (!$('#phrase-editor').open) $('#phrase-editor').showModal();
+  $('#phrase-text').focus();
+}
+function editorChanged() { draft.text = $('#phrase-text').value; $('#phrase-save').disabled = !draft.text.trim(); }
+function newPhrase() { if (!busy && !listError) openEditor(draft || { id: '', text: '', original: '' }); }
+async function editPhrase() {
+  if (busy || listError) return;
+  if (draft) return openEditor();
+  const entry = entries[selected]; if (!entry) return;
+  try { const p = await call('PhraseDetail', entry.id); openEditor({ id: p.id, text: p.text, original: p.text }); }
+  catch (err) { toast(message(err)); refresh(); }
+}
+async function savePhrase() {
+  if (!draft || $('#phrase-save').disabled) return;
+  $('#phrase-save').disabled = true;
+  try {
+    const saved = await call('SavePhrase', draft.id, draft.text);
+    draft = null; $('#phrase-editor').close();
+    await refresh(saved.id);
+    if (entries[selected]?.id !== saved.id) { $('#search').value = ''; $('#clear-search').hidden = true; await refresh(saved.id); }
+    toast('常用语已保存');
+  } catch (err) { $('#phrase-error').textContent = message(err); $('#phrase-error').hidden = false; editorChanged(); }
+}
+function cancelEditor() {
+  if (draft && draft.text !== draft.original) { if (!$('#confirm-discard').open) $('#confirm-discard').showModal(); return; }
+  draft = null; $('#phrase-editor').close();
+}
+function askDeletePhrase() { if (!busy && entries[selected]) $('#confirm-phrase-delete').showModal(); }
+async function deletePhrase() {
+  $('#confirm-phrase-delete').close();
+  const index = selected, entry = entries[index]; if (!entry) return;
+  try { await call('DeletePhrase', entry.id); await refresh(entries[index + 1]?.id ?? entries[index - 1]?.id); toast('已删除这条常用语'); }
+  catch (err) { toast(message(err)); refresh(); }
+}
+async function reorder(delta) {
+  const entry = entries[selected]; if (!entry || reordering) return;
+  reordering = true;
+  try { await call('MovePhrase', entry.id, delta); await refresh(entry.id); } catch (err) { toast(message(err)); refresh(); } finally { reordering = false; }
+}
 async function dismiss() { if (busy) return; await call('Dismiss'); if (demo) $('#panel').classList.add('dismissed'); }
 
 $('#search').addEventListener('input', () => { ++queryVersion; queryPending = true; $('#clear-search').hidden = !$('#search').value; clearTimeout(queryTimer); queryTimer = setTimeout(refresh, 60); });
@@ -178,7 +227,15 @@ $('#paste').onclick = () => choose(false); $('#copy-only').onclick = () => choos
 $('#pause').onclick = async () => { try { const next = await call('Pause', !state.paused); state.paused = next.paused; header(); toast(state.paused ? '已暂停，新的复制不会保存' : '已恢复记录'); } catch (e) { toast(message(e)); } };
 $('#settings').onclick = async () => { $('#preferences').showModal(); try { state.accessible = await call('Permission'); header(); } catch (e) { toast(message(e)); } };
 $$('.close-dialog').forEach(b => b.onclick = () => b.closest('dialog').close());
-$$('dialog').forEach(d => d.addEventListener('click', e => { const r = d.getBoundingClientRect(); if (e.target === d && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) d.close(); }));
+$$('dialog').forEach(d => d.addEventListener('click', e => { const r = d.getBoundingClientRect(); if (e.target === d && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) d === $('#phrase-editor') ? cancelEditor() : d.close(); }));
+$('#new-phrase').onclick = $('#empty-new').onclick = newPhrase;
+$('#phrase-text').addEventListener('input', () => { $('#phrase-error').hidden = true; editorChanged(); });
+$('#phrase-text').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.isComposing) { e.preventDefault(); savePhrase(); } });
+$('#phrase-save').onclick = savePhrase; $('#phrase-cancel').onclick = cancelEditor;
+$('#phrase-editor').addEventListener('cancel', e => { e.preventDefault(); cancelEditor(); });
+$('#keep-editing').onclick = () => { $('#confirm-discard').close(); $('#phrase-text').focus(); };
+$('#discard-phrase').onclick = () => { draft = null; $('#confirm-discard').close(); $('#phrase-editor').close(); };
+$('#confirm-phrase-delete-button').onclick = deletePhrase;
 $('#clear-history').onclick = () => { $('#preferences').close(); $('#confirm-clear').showModal(); };
 $('#confirm-delete').onclick = async () => { try { applyState(await call('Clear'), true); $('#confirm-clear').close(); toast('所有历史已清空'); } catch (e) { toast(message(e)); } };
 const openPermission = async () => { try { await call('OpenPermission'); } catch (e) { toast(message(e)); } };
@@ -205,6 +262,9 @@ document.addEventListener('keydown', event => {
     case 'view': switchView(action.view); break;
     case 'choose': choose(false); break;
     case 'number': select(action.index); choose(false); break;
+    case 'new': newPhrase(); break;
+    case 'edit': editPhrase(); break;
+    case 'reorder': reorder(action.delta); break;
   }
 });
 const mq = matchMedia('(prefers-color-scheme:dark)');
