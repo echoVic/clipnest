@@ -42,6 +42,7 @@ function showView() {
   $$('.views button').forEach(b => { b.classList.toggle('active', b.dataset.view === view); b.setAttribute('aria-pressed', b.dataset.view === view); });
   $('#panel').classList.toggle('view-phrases', view === 'phrases');
   $('#search').placeholder = view === 'phrases' ? '搜索常用语…' : '搜索复制过的内容…';
+  $('#search').setAttribute('aria-label', view === 'phrases' ? '搜索常用语' : '搜索历史');
   $('#list').setAttribute('aria-label', view === 'phrases' ? '常用语' : '复制历史');
 }
 // The search text stays, so a query typed on the wrong page carries over.
@@ -87,7 +88,7 @@ function render() {
       copy.append(sub);
     }
     button.append(type, copy, node('kbd', '', i < 9 ? i + 1 : ''));
-    button.addEventListener('click', () => { select(i); choose(false); });
+    button.addEventListener('click', () => { select(i); choose(false, { id: e.id }); });
     // Deliberately no mouseenter handler: pointer hover never steals selection.
     fragment.append(button);
   });
@@ -157,8 +158,9 @@ async function phrasePreview(entry, version) {
     $('#preview-meta').replaceChildren(node('span', '', `${[...p.text].length} 个字符`), actions);
   } catch (err) { if (version === detailVersion) toast(message(err)); }
 }
-async function choose(copyOnly) {
+async function choose(copyOnly, pick) {
   if (queryPending) { clearTimeout(queryTimer); await refresh(); if (queryPending) return; }
+  if (pick) { const i = pick.id ? entries.findIndex(e => e.id === pick.id) : pick.index; if (i < 0 || i >= entries.length) return; select(i); }
   const entry = entries[selected]; if (!entry || busy) return;
   if (!copyOnly && !demo && state.platform === 'darwin' && !state.accessible) {
     state.accessible = await call('Permission'); header();
@@ -169,7 +171,7 @@ async function choose(copyOnly) {
     const result = view === 'phrases' ? await call('InsertPhrase', entry.id, copyOnly) : await call('Choose', state.session, entry.id, copyOnly);
     if (demo && !copyOnly) $('#panel').classList.add('dismissed');
     toast(result.message);
-  } catch (err) { toast(message(err)); if (view === 'phrases') refresh(); }
+  } catch (err) { toast(message(err)); if (view === 'phrases') refresh(entry.id); }
   finally { busy = false; $('#paste').disabled = $('#copy-only').disabled = entries.length === 0; }
 }
 // The draft outlives the dialog: hiding the panel closes the editor but keeps
@@ -188,7 +190,7 @@ async function editPhrase() {
   if (draft) return openEditor();
   const entry = entries[selected]; if (!entry) return;
   try { const p = await call('PhraseDetail', entry.id); openEditor({ id: p.id, text: p.text, original: p.text }); }
-  catch (err) { toast(message(err)); refresh(); }
+  catch (err) { toast(message(err)); refresh(entry.id); }
 }
 async function savePhrase() {
   if (!draft || $('#phrase-save').disabled) return;
@@ -198,6 +200,7 @@ async function savePhrase() {
     draft = null; $('#phrase-editor').close();
     await refresh(saved.id);
     if (entries[selected]?.id !== saved.id) { $('#search').value = ''; $('#clear-search').hidden = true; await refresh(saved.id); }
+    $('#list').focus({ preventScroll: true });
     toast('常用语已保存');
   } catch (err) { $('#phrase-error').textContent = message(err); $('#phrase-error').hidden = false; editorChanged(); }
 }
@@ -210,12 +213,12 @@ async function deletePhrase() {
   $('#confirm-phrase-delete').close();
   const index = selected, entry = entries[index]; if (!entry) return;
   try { await call('DeletePhrase', entry.id); await refresh(entries[index + 1]?.id ?? entries[index - 1]?.id); toast('已删除这条常用语'); }
-  catch (err) { toast(message(err)); refresh(); }
+  catch (err) { toast(message(err)); refresh(entry.id); }
 }
 async function reorder(delta) {
   const entry = entries[selected]; if (!entry || reordering) return;
   reordering = true;
-  try { await call('MovePhrase', entry.id, delta); await refresh(entry.id); } catch (err) { toast(message(err)); refresh(); } finally { reordering = false; }
+  try { await call('MovePhrase', entry.id, delta); await refresh(entry.id); } catch (err) { toast(message(err)); refresh(entry.id); } finally { reordering = false; }
 }
 async function dismiss() { if (busy) return; await call('Dismiss'); if (demo) $('#panel').classList.add('dismissed'); }
 
@@ -261,7 +264,7 @@ document.addEventListener('keydown', event => {
     case 'select': select(moveIndex(selected, action.delta, entries.length)); if (!typing) $('#list').focus({ preventScroll: true }); break;
     case 'view': switchView(action.view); break;
     case 'choose': choose(false); break;
-    case 'number': select(action.index); choose(false); break;
+    case 'number': choose(false, { index: action.index }); break;
     case 'new': newPhrase(); break;
     case 'edit': editPhrase(); break;
     case 'reorder': reorder(action.delta); break;
