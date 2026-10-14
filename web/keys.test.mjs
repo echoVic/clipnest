@@ -13,6 +13,9 @@ test('existing keys behave the same on both pages', () => {
   assert.equal(type('Enter', {}, { view, typing: true, atList: false }), 'choose'); assert.equal(type('Enter', {}, { view, atList: false }), null);
   assert.equal(type('Escape', {}, { view, hasQuery: true }), 'clear-search'); assert.equal(type('Escape', {}, { view }), 'dismiss');
   assert.equal(type('k', { metaKey: true }, { view, typing: true }), 'search'); assert.equal(type('K', { ctrlKey: true }, { view }), 'search');
+  assert.equal(type('Enter', {}, { view }), 'choose');
+  assert.equal(type('Escape', {}, { view, dialogOpen: true }), null); assert.equal(type('k', { metaKey: true }, { view, dialogOpen: true }), null);
+  assert.equal(type('Escape', {}, { view, busy: true }), 'dismiss'); assert.equal(type('k', { metaKey: true }, { view, busy: true }), 'search');
  }
  assert.equal(type('V', { metaKey: true, shiftKey: true }, { demo: true, dialogOpen: true }), 'reopen'); assert.equal(type('v', { metaKey: true, shiftKey: true }), null);
 });
@@ -28,6 +31,13 @@ test('reorder, new and edit belong to the phrases page', () => {
  assert.equal(type('ArrowDown', { altKey: true }), null); assert.equal(type('ArrowDown', { altKey: true }, { ...phrases, hasQuery: true }), null); assert.equal(type('ArrowDown', { altKey: true }, { ...phrases, typing: true }), null);
  assert.equal(type('n', { metaKey: true }, phrases), 'new'); assert.equal(type('N', { ctrlKey: true }, { ...phrases, typing: true }), 'new'); assert.equal(type('n', { metaKey: true }), null);
  assert.equal(type('e', { metaKey: true }, phrases), 'edit'); assert.equal(type('e', { metaKey: true }, { ...phrases, hasSelection: false }), null); assert.equal(type('e', { metaKey: true }), null);
+});
+test('new keys reject extra modifiers', () => {
+ const phrases = { view: 'phrases' };
+ for (const k of ['n', 'e']) for (const mods of [{ shiftKey: true }, { altKey: true }]) assert.equal(type(k, { metaKey: true, ...mods }, phrases), null, `${k} with ${Object.keys(mods)}`);
+ assert.equal(type('ArrowDown', { altKey: true, metaKey: true }, phrases), null); assert.equal(type('ArrowDown', { altKey: true, shiftKey: true }, phrases), null);
+ assert.equal(type('ArrowRight', { metaKey: true }), null); assert.equal(type('ArrowRight', { altKey: true }), null);
+ assert.equal(type('V', { shiftKey: true }, { demo: true }), null);
 });
 test('busy, open dialogs and IME composition block the keys', () => {
  const phrases = { view: 'phrases' };
