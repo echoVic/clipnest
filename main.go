@@ -40,7 +40,7 @@ func trayIcon() []byte {
 }
 func main() {
 	webAddress := flag.String("web", "", "启动仅含示例数据的浏览器交互演示")
-	dataDir := flag.String("data-dir", "", "历史存储目录")
+	dataDir := flag.String("data-dir", "", "历史与常用语的存储目录")
 	flag.Parse()
 	web, _ := fs.Sub(frontend, "web")
 	if *webAddress != "" {
