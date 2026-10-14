@@ -14,3 +14,5 @@ dialog{padding:25px;border-radius:17px;border:1px solid var(--line);background:v
 /* Grid tracks must shrink below intrinsic content so both panes scroll inside. */
 .workspace{grid-template-rows:minmax(0,1fr)}.history,.preview{min-height:0}.entry-title{font-size:12px}.entry-sub{font-size:10px}.tagline{font-size:11px}.list-heading{color:#8c8698}.footer{color:#8c8698}.preview-meta{color:#8c8698}.list:focus-visible{box-shadow:none}.entry.selected:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 :root{color:var(--ink)}
+.small-note a{color:var(--accent);text-decoration:none}
+.small-note a:hover{text-decoration:underline}

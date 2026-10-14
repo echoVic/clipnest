@@ -111,6 +111,9 @@ func main() {
 				d.lastRevision = d.n.Revision()
 				_ = panelChanged.Broadcast(d.snapshot())
 			}},
+			{Label: "问题反馈…", Click: func(*mygo.MenuItem, *mygo.Window) {
+				_ = mygo.Shell.OpenExternal("https://github.com/echoVic/clipnest/issues/new")
+			}},
 			mygo.Separator(), {Label: "退出 Clipnest", Click: func(*mygo.MenuItem, *mygo.Window) { mygo.App.Quit() }},
 		})
 		d.tray, err = mygo.NewTray(mygo.TrayOptions{Icon: trayIcon(), IconIsTemplate: runtime.GOOS == "darwin", ToolTip: "Clipnest · ⌘⇧V 打开剪贴板历史"})
