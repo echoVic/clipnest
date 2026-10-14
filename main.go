@@ -58,7 +58,7 @@ func main() {
 		return
 	}
 	mygo.App.SetName("Clipnest")
-	mygo.App.SetVersion("0.1.0")
+	mygo.App.SetVersion("0.1.1")
 	mygo.App.SetActivationPolicy(mygo.ActivationPolicyAccessory)
 	if os.Getenv("MYGO_GENERATE") != "" {
 		mygo.Bind(&Desktop{})
