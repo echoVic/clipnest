@@ -71,7 +71,10 @@ func (d *Desktop) show() {
 	d.entries, _ = d.h.Snapshot()
 	d.session++
 	a := mygo.Screen.DisplayNearestPoint(mygo.Screen.CursorScreenPoint()).WorkArea
-	d.win.SetPosition(a.X+max(0, (a.Width-860)/2), a.Y+max(0, (a.Height-570)/3))
+	// Fit the screen under the pointer, including scaled or smaller displays.
+	d.win.SetSize(min(860, a.Width), min(570, a.Height))
+	width, height := d.win.Size()
+	d.win.SetPosition(a.X+max(0, (a.Width-width)/2), a.Y+max(0, (a.Height-height)/3))
 	_ = panelChanged.Broadcast(d.snapshot())
 	d.win.Show()
 	d.win.Focus()

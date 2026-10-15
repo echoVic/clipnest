@@ -5,6 +5,7 @@ import (
 	"embed"
 	"flag"
 	"github.com/egoist/mygo"
+	_ "github.com/egoist/mygo/locales/zh-Hans"
 	"github.com/egoist/mygo/plugins/updater"
 	"image"
 	"image/color"
@@ -59,6 +60,7 @@ func main() {
 		return
 	}
 	mygo.App.SetName("Clipnest")
+	mygo.App.SetLanguages("zh-Hans")
 	mygo.App.SetActivationPolicy(mygo.ActivationPolicyAccessory)
 	if os.Getenv("MYGO_GENERATE") != "" {
 		mygo.Bind(&Desktop{})
@@ -92,7 +94,11 @@ func main() {
 		if err != nil {
 			log.Fatal("无法初始化系统剪贴板：", err)
 		}
-		d.win = mygo.NewWindow(mygo.WindowOptions{Title: "Clipnest · 剪贴板历史", URL: "/", Width: 860, Height: 570, Hidden: true, Frameless: true, Transparent: true, BackgroundColor: "#00000000", DisableResize: true, DisableMaximize: true, DisableMinimize: true, DisableFullScreen: true, AlwaysOnTop: true, SkipTaskbar: true})
+		d.win = mygo.NewWindow(mygo.WindowOptions{
+			Title: "Clipnest · 剪贴板历史", URL: "/", Width: 860, Height: 570,
+			Panel: true, Hidden: true, Frameless: true, DisableResize: true,
+			Transparent: true, BackgroundColor: "#00000000",
+		})
 		d.win.SetMenu(mygo.NewMenu(nil))
 		d.win.OnBlur(func() {
 			if !d.busy {

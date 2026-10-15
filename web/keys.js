@@ -6,7 +6,7 @@ export function keyAction(event, ctx) {
   if (event.isComposing || event.keyCode === 229) return null;
   const key = event.key, lower = key.toLowerCase(), command = event.metaKey || event.ctrlKey, phrases = ctx.view === 'phrases';
   if (lower === 'v' && command && event.shiftKey && ctx.demo) return { type: 'reopen' };
-  if (ctx.dialogOpen) return null;
+  if (ctx.dialogOpen) return key === 'Escape' ? { type: 'cancel-dialog' } : null;
   if (key === 'Escape') return { type: ctx.hasQuery ? 'clear-search' : 'dismiss' };
   if (command && lower === 'k') return { type: 'search' };
   if (ctx.busy) return null;

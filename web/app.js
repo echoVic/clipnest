@@ -255,11 +255,19 @@ $('#list').addEventListener('wheel', event => {
 }, { passive: false });
 
 document.addEventListener('keydown', event => {
+  // The native panel also handles unclaimed Escape. Claim it even when an
+  // IME uses the legacy 229 key code, without closing its composition.
+  if (event.key === 'Escape' && (event.isComposing || event.keyCode === 229)) { event.preventDefault(); return; }
   const typing = event.target.matches('input,textarea,select,[contenteditable=true]');
   const action = keyAction(event, { demo, dialogOpen: !!$('dialog[open]'), busy, typing, atList: event.target === document.body || event.target === $('#list'), view, hasQuery: !!$('#search').value, hasSelection: selected >= 0, count: entries.length });
   if (!action) return;
   event.preventDefault();
   switch (action.type) {
+    case 'cancel-dialog': {
+      const dialog = event.target.closest('dialog[open]') || $$('dialog[open]').at(-1);
+      if (dialog === $('#phrase-editor')) cancelEditor(); else dialog?.close();
+      break;
+    }
     case 'reopen': $('#reopen').click(); break;
     case 'clear-search': $('#search').value = ''; $('#clear-search').hidden = true; refresh(); $('#list').focus(); break;
     case 'dismiss': dismiss(); break;
@@ -278,4 +286,14 @@ function applyTheme() { const theme = $('#theme').value; document.documentElemen
 try { $('#theme').value = localStorage.getItem('clipnest-theme') || 'system'; } catch {}
 $('#theme').onchange = () => { try { localStorage.setItem('clipnest-theme', $('#theme').value); } catch {} applyTheme(); }; mq.addEventListener('change', applyTheme); applyTheme();
 if (!demo) window.mygo.on('clipnest:panel', data => applyState(data, true));
+if (!demo) {
+  const applyPreferences = preferences => {
+    const root = document.documentElement;
+    root.classList.toggle('reduce-motion', !!preferences.reduceMotion);
+    root.classList.toggle('reduce-transparency', !!preferences.reduceTransparency);
+    root.classList.toggle('high-contrast', !!preferences.highContrast);
+  };
+  applyPreferences(window.mygo.preferences);
+  window.mygo.on('mygo:preferences', applyPreferences);
+}
 try { applyState(await call('State'), true); } catch (e) { $('#notice').hidden = false; $('#notice').textContent = `无法加载历史：${message(e)}`; }

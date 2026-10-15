@@ -14,7 +14,7 @@ test('existing keys behave the same on both pages', () => {
   assert.equal(type('Escape', {}, { view, hasQuery: true }), 'clear-search'); assert.equal(type('Escape', {}, { view }), 'dismiss');
   assert.equal(type('k', { metaKey: true }, { view, typing: true }), 'search'); assert.equal(type('K', { ctrlKey: true }, { view }), 'search');
   assert.equal(type('Enter', {}, { view }), 'choose');
-  assert.equal(type('Escape', {}, { view, dialogOpen: true }), null); assert.equal(type('k', { metaKey: true }, { view, dialogOpen: true }), null);
+  assert.equal(type('Escape', {}, { view, dialogOpen: true }), 'cancel-dialog'); assert.equal(type('k', { metaKey: true }, { view, dialogOpen: true }), null);
   assert.equal(type('Escape', {}, { view, busy: true }), 'dismiss'); assert.equal(type('k', { metaKey: true }, { view, busy: true }), 'search');
  }
  assert.equal(type('V', { metaKey: true, shiftKey: true }, { demo: true, dialogOpen: true }), 'reopen'); assert.equal(type('v', { metaKey: true, shiftKey: true }), null);
@@ -23,6 +23,14 @@ test('left and right switch pages only outside inputs', () => {
  assert.deepEqual(keyAction(key('ArrowRight'), ctx()), { type: 'view', view: 'phrases' });
  assert.deepEqual(keyAction(key('ArrowLeft'), ctx({ view: 'phrases' })), { type: 'view', view: 'history' });
  assert.equal(type('ArrowRight', {}, { typing: true }), null); assert.equal(type('ArrowRight', { shiftKey: true }), null);
+});
+test('Escape dismisses the innermost UI before the native panel', () => {
+ assert.equal(type('Escape', {}, { dialogOpen: true, hasQuery: true, typing: true }), 'cancel-dialog');
+ assert.equal(type('Escape', {}, { dialogOpen: true, busy: true }), 'cancel-dialog');
+ assert.equal(type('Escape', {}, { hasQuery: true }), 'clear-search');
+ assert.equal(type('Escape'), 'dismiss');
+ assert.equal(type('Escape', { isComposing: true }, { dialogOpen: true }), null);
+ assert.equal(type('Escape', { keyCode: 229 }), null);
 });
 test('reorder, new and edit belong to the phrases page', () => {
  const phrases = { view: 'phrases' };
