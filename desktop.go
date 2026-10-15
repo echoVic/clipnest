@@ -32,6 +32,7 @@ type PasteResult struct {
 // Desktop's fields are main-thread-only; persistence has its own locks.
 type Desktop struct {
 	h            *History
+	p            *Phrases
 	n            *nativeBridge
 	win          *mygo.Window
 	tray         *mygo.Tray
@@ -169,17 +170,24 @@ func (d *Desktop) Clear() (s PanelState, err error) {
 	return
 }
 
-func (d *Desktop) Choose(session uint64, id string, copyOnly bool) (result PasteResult, err error) {
+func (d *Desktop) Choose(session uint64, id string, copyOnly bool) (PasteResult, error) {
+	var e Entry
+	var err error
+	mygo.RunOnMain(func() { e, err = d.find(session, id) })
+	if err != nil {
+		return PasteResult{}, err
+	}
+	return d.deliver(e, copyOnly)
+}
+
+// deliver copies e and, unless copyOnly, pastes it into the app the panel was
+// opened from. Recording the clipboard revision keeps capture from re-adding it.
+func (d *Desktop) deliver(e Entry, copyOnly bool) (result PasteResult, err error) {
 	var target targetApp
 	started := false
 	mygo.RunOnMain(func() {
 		if d.busy {
 			err = errors.New("正在粘贴，请稍后")
-			return
-		}
-		var e Entry
-		e, err = d.find(session, id)
-		if err != nil {
 			return
 		}
 		if !copyOnly && runtime.GOOS == "darwin" && !d.n.Accessible() {
@@ -247,6 +255,26 @@ func (d *Desktop) Choose(session uint64, id string, copyOnly bool) (result Paste
 		result.Message = "内容已复制，请在原应用手动粘贴"
 	}
 	return
+}
+
+func (d *Desktop) Phrases(q string) ([]Phrase, error)         { return d.p.List(q) }
+func (d *Desktop) PhraseDetail(id string) (Phrase, error)     { return d.p.Get(id) }
+func (d *Desktop) SavePhrase(id, text string) (Phrase, error) { return d.p.Save(id, text) }
+func (d *Desktop) DeletePhrase(id string) error               { return d.p.Delete(id) }
+func (d *Desktop) MovePhrase(id string, delta int) error      { return d.p.Move(id, delta) }
+
+// InsertPhrase pastes a phrase the way Choose pastes an entry. newEntry yields
+// the ID capture would compute, so the write never lands in history.
+func (d *Desktop) InsertPhrase(id string, copyOnly bool) (PasteResult, error) {
+	p, err := d.p.Get(id)
+	if err != nil {
+		return PasteResult{}, err
+	}
+	e, err := newEntry(p.Text, nil, "")
+	if err != nil {
+		return PasteResult{}, err
+	}
+	return d.deliver(e, copyOnly)
 }
 
 func (d *Desktop) capture() {

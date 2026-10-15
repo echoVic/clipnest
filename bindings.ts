@@ -38,6 +38,16 @@ export interface PasteResult {
   message: string;
 }
 
+/**
+ * Phrase is text kept for reuse. IDs survive edits and the order is the
+ * user's own, so a phrase's number only changes when the user moves it.
+ */
+export interface Phrase {
+  id: string;
+  text?: string;
+  excerpt?: string;
+}
+
 // ---- Services ----
 
 /** Desktop's fields are main-thread-only; persistence has its own locks. */
@@ -58,11 +68,24 @@ export const Desktop = {
   delete(session: number, id: string): Promise<PanelState> {
     return call("Desktop.Delete", session, id);
   },
+  deletePhrase(id: string): Promise<void> {
+    return call("Desktop.DeletePhrase", id);
+  },
   detail(session: number, id: string): Promise<Entry> {
     return call("Desktop.Detail", session, id);
   },
   dismiss(): Promise<void> {
     return call("Desktop.Dismiss");
+  },
+  /**
+   * InsertPhrase pastes a phrase the way Choose pastes an entry. newEntry yields
+   * the ID capture would compute, so the write never lands in history.
+   */
+  insertPhrase(id: string, copyOnly: boolean): Promise<PasteResult> {
+    return call("Desktop.InsertPhrase", id, copyOnly);
+  },
+  movePhrase(id: string, delta: number): Promise<void> {
+    return call("Desktop.MovePhrase", id, delta);
   },
   openPermission(): Promise<void> {
     return call("Desktop.OpenPermission");
@@ -73,8 +96,17 @@ export const Desktop = {
   permission(): Promise<boolean> {
     return call("Desktop.Permission");
   },
+  phraseDetail(id: string): Promise<Phrase> {
+    return call("Desktop.PhraseDetail", id);
+  },
+  phrases(q: string): Promise<Phrase[]> {
+    return call("Desktop.Phrases", q);
+  },
   query(session: number, q: string, kind: string): Promise<Entry[]> {
     return call("Desktop.Query", session, q, kind);
+  },
+  savePhrase(id: string, text: string): Promise<Phrase> {
+    return call("Desktop.SavePhrase", id, text);
   },
   state(): Promise<PanelState> {
     return call("Desktop.State");

@@ -189,17 +189,29 @@ func (h *History) Save() error {
 	a := archive{1, h.paused, append([]Entry{}, h.entries...)}
 	version := h.version
 	h.mu.Unlock()
-	if err := os.MkdirAll(filepath.Dir(h.path), 0700); err != nil {
+	if err := writePrivateJSON(h.path, a); err != nil {
 		return err
 	}
-	f, err := os.CreateTemp(filepath.Dir(h.path), ".history-*")
+	h.mu.Lock()
+	h.saved = version
+	h.mu.Unlock()
+	return nil
+}
+
+// writePrivateJSON replaces path with v encoded as JSON, readable only by the
+// user. Writing a temp file and renaming it means a crash never leaves half a file.
+func writePrivateJSON(path string, v any) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return err
+	}
+	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+"-*")
 	if err != nil {
 		return err
 	}
 	name := f.Name()
 	defer os.Remove(name)
 	if err = f.Chmod(0600); err == nil {
-		err = json.NewEncoder(f).Encode(a)
+		err = json.NewEncoder(f).Encode(v)
 	}
 	if err == nil {
 		err = f.Sync()
@@ -211,11 +223,5 @@ func (h *History) Save() error {
 	if err != nil {
 		return err
 	}
-	if err = os.Rename(name, h.path); err != nil {
-		return err
-	}
-	h.mu.Lock()
-	h.saved = version
-	h.mu.Unlock()
-	return nil
+	return os.Rename(name, path)
 }

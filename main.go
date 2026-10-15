@@ -41,7 +41,7 @@ func trayIcon() []byte {
 }
 func main() {
 	webAddress := flag.String("web", "", "启动仅含示例数据的浏览器交互演示")
-	dataDir := flag.String("data-dir", "", "历史存储目录")
+	dataDir := flag.String("data-dir", "", "历史与常用语的存储目录")
 	flag.Parse()
 	web, _ := fs.Sub(frontend, "web")
 	if *webAddress != "" {
@@ -82,7 +82,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	d := &Desktop{h: h, lastRevision: -2, stop: make(chan struct{}), shortcut: "⌘ ⇧ V"}
+	d := &Desktop{h: h, p: openPhrases(filepath.Join(dir, "phrases.json")), lastRevision: -2, stop: make(chan struct{}), shortcut: "⌘ ⇧ V"}
 	mygo.Use(updater.Plugin)
 	mygo.SetFrontend(web)
 	mygo.Bind(d)
