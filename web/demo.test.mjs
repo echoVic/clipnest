@@ -5,9 +5,9 @@ test('demo phrases follow the desktop rules', async () => {
  const { call } = createDemo();
  const list = await call('Phrases', '');
  assert.equal(list.length, 4); assert.equal(list[0].text, undefined);
- assert.equal(list[1].excerpt, 'use flux-sdd impl for each impl，use sdt use worktree for each impl');
- assert.equal((await call('Phrases', '  DEV DOCS ')).length, 1);
- assert.equal((await call('PhraseDetail', list[1].id)).text, 'use flux-sdd impl\nfor each impl，use sdt\nuse worktree for each impl');
+ assert.equal(list[1].excerpt, 'Merged — thanks for the PR! Released in v0.1.4. This will land in the next update, which checks every 4 hours.');
+ assert.equal((await call('Phrases', '  REPORT ')).length, 1);
+ assert.equal((await call('PhraseDetail', list[1].id)).text, 'Merged — thanks for the PR! Released in v0.1.4.\nThis will land in the next update, which checks every 4 hours.');
  const added = await call('SavePhrase', '', 'new one');
  assert.deepEqual((await call('Phrases', '')).at(-1), { id: added.id, excerpt: 'new one' });
  await call('MovePhrase', added.id, -1); assert.equal((await call('Phrases', '')).at(-2).id, added.id);

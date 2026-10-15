@@ -12,8 +12,8 @@ const samples = [
   ['text', '向前一步，也是一种进展。', '向前一步，也是一种进展。', '备忘录'],
 ];
 const phraseSamples = [
-  'Can you make it like google dev docs style. More dead prose. No aphorisms, no flourishes. Simple.',
-  'use flux-sdd impl\nfor each impl，use sdt\nuse worktree for each impl',
+  'Thanks for the detailed report! Could you share the steps to reproduce and your macOS version? That will help us track it down faster.',
+  'Merged — thanks for the PR! Released in v0.1.4.\nThis will land in the next update, which checks every 4 hours.',
   '收到，我今天下班前给你答复。',
   '辛苦了，有问题随时找我。',
 ];
