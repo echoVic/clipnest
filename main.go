@@ -83,7 +83,8 @@ func main() {
 		log.Fatal(err)
 	}
 	d := &Desktop{h: h, p: openPhrases(filepath.Join(dir, "phrases.json")), lastRevision: -2, stop: make(chan struct{}), shortcut: "⌘ ⇧ V"}
-	mygo.Use(updater.Plugin)
+	// 自动检查更新的频率：4 小时一次（默认一天），新发布的版本当天就能被看到。
+	mygo.Use(updater.New(updater.Options{Interval: 4 * time.Hour}))
 	mygo.SetFrontend(web)
 	mygo.Bind(d)
 	mygo.App.WhenReady(func() {
