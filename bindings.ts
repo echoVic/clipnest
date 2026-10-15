@@ -42,6 +42,13 @@ export interface PasteResult {
 
 /** Desktop's fields are main-thread-only; persistence has its own locks. */
 export const Desktop = {
+  /**
+   * CheckForUpdates opens the update window, which says when Clipnest is up to
+   * date or offers the new version.
+   */
+  checkForUpdates(): Promise<void> {
+    return call("Desktop.CheckForUpdates");
+  },
   choose(session: number, id: string, copyOnly: boolean): Promise<PasteResult> {
     return call("Desktop.Choose", session, id, copyOnly);
   },

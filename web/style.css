@@ -16,3 +16,5 @@ dialog{padding:25px;border-radius:17px;border:1px solid var(--line);background:v
 :root{color:var(--ink)}
 .small-note a{color:var(--accent);text-decoration:none}
 .small-note a:hover{text-decoration:underline}
+.link-button{background:none;border:0;padding:0;font:inherit;color:var(--accent);cursor:pointer}
+.link-button:hover{text-decoration:underline}

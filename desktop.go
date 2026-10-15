@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/plugins/updater"
 	"github.com/egoist/mygo/transfer"
 	"runtime"
 	"slices"
@@ -124,6 +125,10 @@ func (d *Desktop) OpenPermission() error {
 	}
 	return mygo.Shell.OpenExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
 }
+
+// CheckForUpdates opens the update window, which says when Clipnest is up to
+// date or offers the new version.
+func (d *Desktop) CheckForUpdates() { updater.CheckForUpdates() }
 func (d *Desktop) Pause(paused bool) (s PanelState, err error) {
 	mygo.RunOnMain(func() { d.h.Pause(paused); d.lastRevision = d.n.Revision(); s = d.snapshot() })
 	err = d.h.Save()

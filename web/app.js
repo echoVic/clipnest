@@ -146,6 +146,9 @@ $('#clear-history').onclick = () => { $('#preferences').close(); $('#confirm-cle
 $('#confirm-delete').onclick = async () => { try { applyState(await call('Clear'), true); $('#confirm-clear').close(); toast('所有历史已清空'); } catch (e) { toast(message(e)); } };
 const openPermission = async () => { try { await call('OpenPermission'); } catch (e) { toast(message(e)); } };
 $('#permission').onclick = $('#permission-open').onclick = openPermission;
+// 更新窗口自己会说明结果；演示版没有桌面能力，不显示这个入口。
+$('#check-update-wrap').hidden = demo;
+$('#check-update').onclick = () => { if (!demo) api.call('CheckForUpdates').catch(() => {}); };
 $('#permission-copy').onclick = () => { $('#permission-dialog').close(); choose(true); };
 $('#reopen').onclick = async () => applyState(await call('State'), true);
 $('#list').addEventListener('wheel', event => {

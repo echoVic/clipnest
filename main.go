@@ -5,6 +5,7 @@ import (
 	"embed"
 	"flag"
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/plugins/updater"
 	"image"
 	"image/color"
 	"image/png"
@@ -58,7 +59,6 @@ func main() {
 		return
 	}
 	mygo.App.SetName("Clipnest")
-	mygo.App.SetVersion("0.1.1")
 	mygo.App.SetActivationPolicy(mygo.ActivationPolicyAccessory)
 	if os.Getenv("MYGO_GENERATE") != "" {
 		mygo.Bind(&Desktop{})
@@ -83,6 +83,7 @@ func main() {
 		log.Fatal(err)
 	}
 	d := &Desktop{h: h, lastRevision: -2, stop: make(chan struct{}), shortcut: "⌘ ⇧ V"}
+	mygo.Use(updater.Plugin)
 	mygo.SetFrontend(web)
 	mygo.Bind(d)
 	mygo.App.WhenReady(func() {
@@ -111,6 +112,7 @@ func main() {
 				d.lastRevision = d.n.Revision()
 				_ = panelChanged.Broadcast(d.snapshot())
 			}},
+			updater.MenuItem(),
 			{Label: "问题反馈…", Click: func(*mygo.MenuItem, *mygo.Window) {
 				_ = mygo.Shell.OpenExternal("https://github.com/echoVic/clipnest/issues/new")
 			}},

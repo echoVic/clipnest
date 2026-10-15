@@ -1,7 +1,7 @@
 {
   "name": "Clipnest",
   "identifier": "app.clipnest.desktop",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "frontendDist": "web",
   "out": "build",
   "bindings": "bindings.ts",
@@ -10,5 +10,10 @@
     "notarize": {
       "keychainProfile": "clipnest-notary"
     }
+  },
+  "updates": {
+    "publicKey": "0ZE+ktIAa8WWCN9qm3Gyg+4q1He4iPKclVBRfi7lEQc=",
+    "github": "echoVic/clipnest",
+    "privateKey": "~/Library/Application Support/mygo/update-keys/mygo-update.key"
   }
 }
