@@ -60,6 +60,8 @@ Linux / Windows 能编译，桌面版仅提供历史、常用语与复制，不�
 
 正式发布由 `scripts/sign-notarize-macos.sh` 在 macOS 上完成 Developer ID 签名、Apple 公证与 stapling；证书与公证凭据存放在本机钥匙串，不进入仓库。自行分发时请替换为自己的 Developer ID 与公证凭据。
 
+自动更新由 `mygo.json` 的 `updates` 配置（公钥和发布仓库）。签名更新包的私钥不在仓库和配置里，发布时通过环境变量传入：`MYGO_UPDATER_PRIVATE_KEY="$(cat <私钥文件>)" scripts/sign-notarize-macos.sh`。没有私钥时 `mygo build` 照常构建、只是不生成更新包，所以发布脚本缺少它时会直接停止。
+
 ## 许可证
 
 本项目基于 [MIT 许可证](LICENSE) 开源，© 2026 echoVic。

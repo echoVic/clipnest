@@ -7,6 +7,13 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# 自动更新包用更新签名私钥签名。私钥不在仓库和配置里，由发布者传入；
+# 没有它时构建照常完成，却不会生成更新包，已安装的 Clipnest 就收不到这一版。
+if [ -z "${MYGO_UPDATER_PRIVATE_KEY:-}" ]; then
+  printf '请先设置 MYGO_UPDATER_PRIVATE_KEY：MYGO_UPDATER_PRIVATE_KEY="$(cat <私钥文件>)" %s\n' "$0" >&2
+  exit 1
+fi
+
 profile=clipnest-notary
 stash=clipnest-notary-app-password
 
