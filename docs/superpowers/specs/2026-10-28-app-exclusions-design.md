@@ -34,6 +34,7 @@
 
 - `app_exclusions.go`：规则验证、读取、原子保存、不可变列表副本和匹配；由 `Storage` 持有，迁移不改变其生命周期。
 - `native_darwin.go`：运行应用 Bundle ID 和所选应用的 NSBundle 元数据；不启动所选应用。
+- `native_application_darwin.go`：原生 NSOpenPanel sheet，仅接受 `com.apple.application-bundle`；取消或退出时只完成一次选择。MyGo 0.7.1 的扩展名过滤把 `.app` 解析为 `com.apple.application-file`，真实应用包不符合该类型，因此此边界使用明确的 UTI，而不是扩展名推断。
 - `desktop_exclusions.go`：原生选择器、添加/移除绑定、主线程操作保护、规则刷新和剪贴板版本处理。
 - `desktop_clipboard.go`：每个版本的来源快照与读取前过滤。
 - `preferences_exclusions.go`：沿用现有圆角分组的原生设置内容，避免继续扩充设置绘制文件。
@@ -49,5 +50,7 @@
 6. 原生设置能添加、移除、取消；版本与检查更新入口保留，规则修改不改变历史或常用语。
 7. 浏览器演示可操作并有清晰示例语义；深浅色和窄窗口可用。
 8. Go 竞态测试、前端测试、Go/MyGo 静态检查及平台构建通过。
+
+实现验证额外覆盖：非法 UTF-8 在 JSON 自动替换前拒绝；配置路径不是普通文件时停止启动；MyGo 退出后丢弃主线程派发时，添加和移除不得继续执行。
 
 本轮开发更新应用版本为 0.1.7，并记录开发中状态。正式发布与签名安装包另按发布指令执行；发布时必须同步独立的 echovic-apps 官网，核验中英文内容、静态下载与自动部署。
