@@ -155,3 +155,64 @@ test('clipboard permission demo keeps one-time consent separate from automatic r
  assert.equal(await denied.call('ClipboardPermission'), 'denied');
  assert.equal(await denied.call('OpenClipboardPermission'), null);
 });
+
+test('demo exclusions add, update the same bundle ID, sort and return independent lists', async () => {
+ const { call } = createDemo();
+ assert.deepEqual(await call('ExcludedApps'), []);
+ assert.deepEqual(await call('AddExcludedApp', 'sample-notes'), [{ bundleID: 'com.example.notes', name: '示例备忘录' }]);
+ const apps = await call('AddExcludedApp', 'sample-browser');
+ assert.deepEqual(apps.map(app => app.bundleID), ['com.example.browser', 'com.example.notes']);
+ apps[0].name = 'changed outside the demo'; apps.push({ bundleID: 'other', name: 'other' });
+ assert.deepEqual(await call('AddExcludedApp', 'sample-notes-renamed'), [
+  { bundleID: 'com.example.browser', name: '示例浏览器' },
+  { bundleID: 'com.example.notes', name: '示例备忘录（新名称）' },
+ ]);
+ const snapshot = await call('ExcludedApps'); snapshot[1].name = 'another external change';
+ assert.equal((await call('ExcludedApps'))[1].name, '示例备忘录（新名称）');
+ assert.deepEqual(await call('RemoveExcludedApp', 'com.example.browser'), [
+  { bundleID: 'com.example.notes', name: '示例备忘录（新名称）' },
+ ]);
+ assert.deepEqual(await call('RemoveExcludedApp', 'com.example.notes'), []);
+});
+
+test('demo exclusions cancellation and invalid samples leave rules unchanged', async () => {
+ const { call } = createDemo();
+ const apps = await call('AddExcludedApp', 'sample-notes');
+ assert.deepEqual(await call('AddExcludedApp', null), apps);
+ assert.deepEqual(await call('AddExcludedApp'), apps);
+ await assert.rejects(call('AddExcludedApp', '/Applications/Safari.app'), /示例/);
+ assert.deepEqual(await call('ExcludedApps'), apps);
+ assert.deepEqual(await call('RemoveExcludedApp', 'not-excluded'), apps);
+});
+
+test('demo exclusion changes preserve the active history session, search and phrases', async () => {
+ const demo = createDemo({ large: true }), ready = readyState(demo), events = [];
+ await demo.call('State'); const state = await ready;
+ const phrases = await demo.call('Phrases', '');
+ await demo.call('Search', state.session, 17);
+ const page = await demo.call('Page', state.session, 17, '设计', 'all', 50, 50);
+ const detail = await demo.call('Detail', state.session, page.entries[0].id);
+ demo.on('clipnest:panel', event => events.push(event));
+ await demo.call('AddExcludedApp', 'sample-notes');
+ await demo.call('AddExcludedApp', 'sample-notes-renamed');
+ await demo.call('AddExcludedApp', null);
+ await demo.call('RemoveExcludedApp', 'com.example.notes');
+ assert.deepEqual(events, [], 'exclusion management must not publish or rebuild a history session');
+ assert.deepEqual(await demo.call('Page', state.session, 17, '设计', 'all', 50, 50), page);
+ assert.deepEqual(await demo.call('Detail', state.session, detail.id), detail);
+ await assert.rejects(demo.call('Search', state.session, 16), /搜索已过期/);
+ assert.deepEqual(await demo.call('Phrases', ''), phrases);
+ assert.deepEqual(await demo.call('StorageStatus'), state.storage);
+ assert.equal((await demo.call('Choose', state.session, detail.id, true)).copied, false);
+});
+
+test('demo exclusions persist through reopening, migration, retention and clearing, but not a new demo instance', async () => {
+ const demo = createDemo({ legacyStorage: true });
+ const apps = await demo.call('AddExcludedApp', 'sample-notes');
+ for (const [method, args] of [['State', []], ['MigrateStorage', []], ['SaveRetention', [{ maxMiB: 0, keepDays: 0 }]], ['Clear', []]]) {
+  const ready = readyState(demo);
+  await demo.call(method, ...args); await ready;
+  assert.deepEqual(await demo.call('ExcludedApps'), apps, method);
+ }
+ assert.deepEqual(await createDemo().call('ExcludedApps'), []);
+});

@@ -80,6 +80,12 @@
       <section class="settings-group" aria-labelledby="paste-group-title"><h3 id="paste-group-title">自动粘贴</h3>
         <div class="setting-row"><div><strong>辅助功能</strong><p id="permission-status">正在检查辅助功能权限…</p></div><button id="permission" class="secondary">辅助功能设置…</button></div>
       </section>
+      <section id="excluded-apps-group" class="settings-group" aria-labelledby="excluded-apps-title" aria-busy="false"><h3 id="excluded-apps-title">排除应用</h3>
+        <div class="setting-row"><p id="excluded-apps-note"></p><button id="excluded-apps-add" type="button" class="secondary" disabled>添加示例…</button></div>
+        <ul id="excluded-apps-list" class="excluded-apps-list" aria-label="已排除的应用"></ul>
+        <p id="excluded-apps-empty" class="excluded-apps-status" role="status" hidden></p>
+        <p id="excluded-apps-error" class="field-error" role="alert" hidden></p><button id="excluded-apps-retry" type="button" class="link-button" hidden>重试加载</button>
+      </section>
       <p class="settings-note"><svg><use href="#i-shield"/></svg><span>文字与图片仅保存在这台电脑。标记为机密的内容不会记录。</span></p>
     </section>
     <section id="preferences-storage" role="tabpanel" aria-labelledby="preferences-storage-tab" hidden>
@@ -98,6 +104,14 @@
       </section>
     </section>
   </div>
+</dialog>
+<dialog id="excluded-app-picker" class="permission-dialog" aria-labelledby="excluded-app-picker-title" aria-describedby="excluded-app-picker-note">
+  <header class="preferences-header"><h2 id="excluded-app-picker-title">选择示例应用（SAMPLE）</h2></header>
+  <div class="permission-content">
+    <p id="excluded-app-picker-note">仅演示排除规则，不访问文件系统、真实应用或系统剪贴板。选择同一 Bundle ID 的示例会更新名称。</p>
+    <label class="excluded-app-sample-label" for="excluded-app-sample">示例应用</label><select id="excluded-app-sample"></select>
+  </div>
+  <footer class="permission-actions"><button id="excluded-app-cancel" type="button" class="secondary" autofocus>取消</button><button id="excluded-app-confirm" type="button" class="primary">添加示例</button></footer>
 </dialog>
 <dialog id="confirm-clear" aria-labelledby="clear-title"><div class="dialog-top"><div><span class="eyebrow">清理历史</span><h2 id="clear-title">清空所有复制记录？</h2></div></div><p>此操作无法撤销。常用语和当前系统剪贴板不会被清空。</p><div class="confirm-actions"><button class="secondary close-dialog" autofocus>取消</button><button id="confirm-delete" class="danger">确认清空</button></div></dialog>
 <dialog id="permission-dialog" class="permission-dialog" aria-labelledby="permission-title">

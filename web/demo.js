@@ -17,6 +17,12 @@ const phraseSamples = [
   '收到，我今天下班前给你答复。',
   '辛苦了，有问题随时找我。',
 ];
+export const sampleApps = Object.freeze([
+  { id: 'sample-browser', bundleID: 'com.example.browser', name: '示例浏览器' },
+  { id: 'sample-notes', bundleID: 'com.example.notes', name: '示例备忘录' },
+  { id: 'sample-passwords', bundleID: 'com.example.passwords', name: '示例密码管理器' },
+  { id: 'sample-notes-renamed', bundleID: 'com.example.notes', name: '示例备忘录（新名称）' },
+].map(Object.freeze));
 // Same excerpt and limits as phrases.go, so the demo shows what the app would.
 const excerpt = text => { const flat = [...text.trim().split(/\s+/).join(' ')]; return flat.length > 140 ? flat.slice(0, 140).join('') + '…' : flat.join(''); };
 export function createDemo({ version = '开发版', accessible = true, legacyStorage = false, large = false, clipboardAccess = 'allowed' } = {}) {
@@ -27,6 +33,8 @@ export function createDemo({ version = '开发版', accessible = true, legacySto
   let session = 0, revision = 0, paused = false, loading = false, readyTimer;
   const listeners = new Set();
   let storage = { backend: legacyStorage ? 'json' : 'sqlite', migrationAvailable: legacyStorage, cleanupPending: false, retention: { maxMiB: 512, keepDays: 0 } };
+  let excludedApps = [];
+  const exclusions = () => excludedApps.map(app => ({ ...app }));
   let phrases = phraseSamples.map((text, i) => ({ id: `phrase-${i}`, text })), nextPhrase = phrases.length;
   const phrase = id => { const p = phrases.find(x => x.id === id); if (!p) throw new Error('这条常用语已删除'); return p; };
   const checkPhrase = text => {
@@ -56,6 +64,18 @@ export function createDemo({ version = '开发版', accessible = true, legacySto
     switch (method) {
       case 'State': return fresh(true);
       case 'StorageStatus': return status();
+      case 'ExcludedApps': return exclusions();
+      case 'AddExcludedApp': {
+        if (args[0] == null) return exclusions();
+        const app = sampleApps.find(app => app.id === args[0]);
+        if (!app) throw Error('请选择示例应用；演示不读取真实应用');
+        excludedApps = [...excludedApps.filter(item => item.bundleID !== app.bundleID), { bundleID: app.bundleID, name: app.name }]
+          .sort((a, b) => a.bundleID < b.bundleID ? -1 : a.bundleID > b.bundleID ? 1 : 0);
+        return exclusions();
+      }
+      case 'RemoveExcludedApp':
+        excludedApps = excludedApps.filter(app => app.bundleID !== args[0]);
+        return exclusions();
       case 'MigrateStorage':
         storage = { ...storage, backend: 'sqlite', migrationAvailable: false, cleanupPending: false };
         fresh(true);

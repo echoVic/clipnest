@@ -112,3 +112,13 @@ dialog{padding:25px;border-radius:17px;border:1px solid var(--line);background:v
 .permission-actions{display:flex;justify-content:flex-end;gap:8px;flex-shrink:0;padding:16px 24px;border-top:1px solid var(--line)}
 .permission-actions button{font-size:12px;min-height:30px;white-space:nowrap}
 @media(max-width:480px){.permission-content{padding:18px 14px}.permission-actions{padding:16px 14px;gap:6px}.permission-actions button{padding-inline:9px}}
+/* Exclusion metadata wraps without pushing the row action off narrow screens. */
+.excluded-apps-list{list-style:none;padding:0;margin:0}
+#preferences .excluded-app-row:first-of-type{border-top:1px solid var(--line)}
+.excluded-app-copy{flex:1;min-width:0;overflow-wrap:anywhere}
+#preferences .excluded-app-id{color:var(--ink);opacity:.75}
+.excluded-apps-status{margin:12px 0 0;color:var(--ink);opacity:.75;font-size:12px;line-height:1.65}
+#excluded-apps-retry{margin-top:8px;font-size:12px}
+#excluded-app-picker-note{margin:0 0 18px;font-size:12px;line-height:1.7;color:var(--ink);opacity:.75}
+.excluded-app-sample-label{display:block;margin-bottom:8px;font-size:13px;font-weight:500}
+#excluded-app-sample{width:100%;min-width:0;padding:8px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--ink);font-size:12px}

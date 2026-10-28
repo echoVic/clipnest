@@ -3,7 +3,7 @@ import { keyAction } from './keys.js';
 import { createDemo } from './demo.js';
 import { DetailCache, PagedList, PAGE_SIZE, virtualRange, scrollForIndex, acceptPanel, panelReadError, updateSelection, characterCount } from './responsiveness.js';
 import { looksLikeMarkdown, renderMarkdown } from './markdown.js';
-import { preferencesTabs } from './preferences.js';
+import { preferencesTabs, preferencesExclusions } from './preferences.js';
 
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -468,6 +468,7 @@ const pauseRecording = async () => {
 };
 $('#pause').onclick = $('#record-pause').onchange = pauseRecording;
 preferencesTabs($('#preferences'));
+const exclusions = preferencesExclusions(document, { call, demo });
 $('#settings').onclick = async () => {
   if (busy) return;
   if (!demo) {
@@ -475,6 +476,7 @@ $('#settings').onclick = async () => {
     return;
   }
   $('#preferences').showModal();
+  await exclusions.refresh();
   try { state.accessible = await call('Permission'); state.clipboardAccess = await call('ClipboardPermission'); header(); }
   catch (e) { toast(message(e)); }
 };
