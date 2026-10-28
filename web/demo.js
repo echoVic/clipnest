@@ -19,9 +19,14 @@ const phraseSamples = [
 ];
 // Same excerpt and limits as phrases.go, so the demo shows what the app would.
 const excerpt = text => { const flat = [...text.trim().split(/\s+/).join(' ')]; return flat.length > 140 ? flat.slice(0, 140).join('') + '…' : flat.join(''); };
-export function createDemo() {
-  let entries = samples.map(([kind, title, text, source], i) => ({ id: `sample-${i}`, kind, title, text, source, excerpt: text.replaceAll('\n', ' '), created: now - i * 125000 }));
-  let session = 1, paused = false;
+export function createDemo({ legacyStorage = false, large = false } = {}) {
+  let entries = Array.from({ length: large ? 10000 : samples.length }, (_, i) => {
+    const [kind, title, text, source] = samples[i % samples.length];
+    return { id: `sample-${i}`, kind, title: large ? `${i + 1} · ${title}` : title, text, source, excerpt: excerpt(text), created: now - i * 125000 };
+  });
+  let session = 0, revision = 0, paused = false, loading = false, readyTimer;
+  const listeners = new Set();
+  let storage = { backend: legacyStorage ? 'json' : 'sqlite', migrationAvailable: legacyStorage, cleanupPending: false, retention: { maxMiB: 512, keepDays: 0 } };
   let phrases = phraseSamples.map((text, i) => ({ id: `phrase-${i}`, text })), nextPhrase = phrases.length;
   const phrase = id => { const p = phrases.find(x => x.id === id); if (!p) throw new Error('这条常用语已删除'); return p; };
   const checkPhrase = text => {
@@ -29,16 +34,61 @@ export function createDemo() {
     if (new TextEncoder().encode(text).length > 64 << 10) throw new Error('单条常用语最多 64 KB');
   };
   const summary = e => ({ ...e, text: undefined, image: undefined });
-  const state = () => ({ session, entries: entries.map(summary), paused, accessible: true, target: '备忘录', platform: 'demo', notice: '', shortcut: '⌘ ⇧ V' });
-  return { async call(method, ...args) {
+  const status = () => ({ ...storage, retention: { ...storage.retention } });
+  const state = () => ({ session, loading, total: entries.length, entries: loading ? [] : entries.slice(0, 50).map(summary), paused, accessible: true, target: '备忘录', platform: 'demo', notice: '', shortcut: '⌘ ⇧ V', storage: status() });
+  const emit = () => { for (const fn of listeners) fn(state()); };
+  const fresh = (publishLoading = false) => {
+    session++; revision = 0; loading = true; clearTimeout(readyTimer);
+    if (publishLoading) emit();
+    readyTimer = setTimeout(() => { loading = false; emit(); }, 10);
+    return state();
+  };
+  const checkSession = id => { if (id !== session) throw Error('会话已过期，请重新打开'); };
+  const checkRevision = next => {
+    if (!Number.isSafeInteger(next) || next < 0) throw Error('无效的搜索版本');
+    if (next < revision) throw Error('搜索已过期');
+    revision = next;
+  };
+  const historyEntry = id => { const e = entries.find(e => e.id === id); if (!e) throw Error('这条记录已删除'); return e; };
+  return {
+    on(event, fn) { if (event === 'clipnest:panel') listeners.add(fn); return () => listeners.delete(fn); },
+    async call(method, ...args) {
     switch (method) {
-      case 'State': return state();
-      case 'Query': return entries.filter(e => (args[2] === 'all' || e.kind === args[2]) && (e.text + e.title + e.source).toLowerCase().includes(args[1].toLowerCase().trim())).map(summary);
-      case 'Detail': return entries.find(e => e.id === args[1]);
-      case 'Choose': return { copied: false, pasted: false, message: args[2] ? '演示：内容已选中，未更改系统剪贴板' : '演示：已选择粘贴，未发送系统按键' };
+      case 'State': return fresh(true);
+      case 'StorageStatus': return status();
+      case 'MigrateStorage':
+        storage = { ...storage, backend: 'sqlite', migrationAvailable: false, cleanupPending: false };
+        fresh(true);
+        return status();
+      case 'SaveRetention': {
+        if (storage.backend !== 'sqlite') throw Error('请先迁移到 SQLite');
+        const { maxMiB, keepDays } = args[0];
+        if (![maxMiB, keepDays].every(n => Number.isSafeInteger(n) && n >= 0)) throw Error('请输入非负整数');
+        storage.retention = { maxMiB, keepDays };
+        if (keepDays) entries = entries.filter(e => e.created >= Date.now() - keepDays * 86400000);
+        if (maxMiB) {
+          const encoder = new TextEncoder();
+          let size = 0;
+          entries = entries.filter(e => { size += encoder.encode(e.text).length; return size <= maxMiB * 1048576; });
+        }
+        return fresh();
+      }
+      case 'Search': checkSession(args[0]); checkRevision(args[1]); return null;
+      case 'Page': {
+        checkSession(args[0]);
+        const [id, next, q, kind, offset, limit] = args;
+        checkRevision(next);
+        if (!Number.isSafeInteger(offset) || offset < 0 || limit !== 50) throw Error('无效的分页');
+        await Promise.resolve();
+        checkSession(id); checkRevision(next);
+        const matches = entries.filter(e => (kind === 'all' || e.kind === kind) && (e.text + e.title + e.source).toLowerCase().includes(q.toLowerCase().trim()));
+        return { entries: matches.slice(offset, offset + limit).map(summary), total: matches.length, offset };
+      }
+      case 'Detail': checkSession(args[0]); return { ...historyEntry(args[1]) };
+      case 'Choose': checkSession(args[0]); historyEntry(args[1]); return { copied: false, pasted: false, message: args[2] ? '演示：内容已选中，未更改系统剪贴板' : '演示：已选择粘贴，未发送系统按键' };
       case 'Pause': paused = args[0]; return state();
-      case 'Delete': entries = entries.filter(e => e.id !== args[1]); return state();
-      case 'Clear': entries = []; session++; return state();
+      case 'Delete': checkSession(args[0]); historyEntry(args[1]); entries = entries.filter(e => e.id !== args[1]); return fresh();
+      case 'Clear': entries = []; return fresh();
       case 'Permission': return true;
       case 'OpenPermission': return null;
       case 'Dismiss': return null;
@@ -57,7 +107,7 @@ export function createDemo() {
         if (j >= 0 && j < phrases.length) { phrases = [...phrases]; [phrases[i], phrases[j]] = [phrases[j], phrases[i]]; }
         return null;
       }
-      case 'InsertPhrase': phrase(args[0]); return { copied: false, pasted: false, message: args[1] ? '演示：内容已选中，未更改系统剪贴板' : '演示：已选择粘贴，未发送系统按键' };
+      case 'InsertPhrase': checkSession(args[0]); phrase(args[1]); return { copied: false, pasted: false, message: args[2] ? '演示：内容已选中，未更改系统剪贴板' : '演示：已选择粘贴，未发送系统按键' };
       default: throw new Error('未知操作');
     }
   }};

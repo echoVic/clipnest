@@ -21,15 +21,24 @@ export interface Entry {
   height?: number;
 }
 
+export interface HistoryPage {
+  entries: Entry[];
+  total: number;
+  offset: number;
+}
+
 export interface PanelState {
   session: number;
   entries: Entry[];
+  total: number;
+  loading: boolean;
   paused: boolean;
   accessible: boolean;
   target: string;
   platform: string;
   notice: string;
   shortcut: string;
+  storage: StorageStatus;
 }
 
 export interface PasteResult {
@@ -46,6 +55,18 @@ export interface Phrase {
   id: string;
   text?: string;
   excerpt?: string;
+}
+
+export interface RetentionPolicy {
+  maxMiB: number;
+  keepDays: number;
+}
+
+export interface StorageStatus {
+  backend: string;
+  migrationAvailable: boolean;
+  cleanupPending: boolean;
+  retention: RetentionPolicy;
 }
 
 // ---- Services ----
@@ -81,14 +102,24 @@ export const Desktop = {
    * InsertPhrase pastes a phrase the way Choose pastes an entry. newEntry yields
    * the ID capture would compute, so the write never lands in history.
    */
-  insertPhrase(id: string, copyOnly: boolean): Promise<PasteResult> {
-    return call("Desktop.InsertPhrase", id, copyOnly);
+  insertPhrase(session: number, id: string, copyOnly: boolean): Promise<PasteResult> {
+    return call("Desktop.InsertPhrase", session, id, copyOnly);
+  },
+  /**
+   * The disk work runs off the AppKit thread. Busy keeps capture and delivery
+   * from changing the clipboard while the stores switch writers.
+   */
+  migrateStorage(): Promise<StorageStatus> {
+    return call("Desktop.MigrateStorage");
   },
   movePhrase(id: string, delta: number): Promise<void> {
     return call("Desktop.MovePhrase", id, delta);
   },
   openPermission(): Promise<void> {
     return call("Desktop.OpenPermission");
+  },
+  page(session: number, revision: number, q: string, kind: string, offset: number, limit: number): Promise<HistoryPage> {
+    return call("Desktop.Page", session, revision, q, kind, offset, limit);
   },
   pause(paused: boolean): Promise<PanelState> {
     return call("Desktop.Pause", paused);
@@ -102,14 +133,20 @@ export const Desktop = {
   phrases(q: string): Promise<Phrase[]> {
     return call("Desktop.Phrases", q);
   },
-  query(session: number, q: string, kind: string): Promise<Entry[]> {
-    return call("Desktop.Query", session, q, kind);
-  },
   savePhrase(id: string, text: string): Promise<Phrase> {
     return call("Desktop.SavePhrase", id, text);
   },
+  saveRetention(policy: RetentionPolicy): Promise<PanelState> {
+    return call("Desktop.SaveRetention", policy);
+  },
+  search(session: number, revision: number): Promise<void> {
+    return call("Desktop.Search", session, revision);
+  },
   state(): Promise<PanelState> {
     return call("Desktop.State");
+  },
+  storageStatus(): Promise<StorageStatus> {
+    return call("Desktop.StorageStatus");
   },
 } as const;
 
