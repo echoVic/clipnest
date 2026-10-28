@@ -1,0 +1,416 @@
+[
+  {
+    "name": "256/clipboard",
+    "pairs": [
+      {
+        "reference_ns": 663875,
+        "candidate_ns": 38194
+      },
+      {
+        "reference_ns": 445680,
+        "candidate_ns": 26430
+      },
+      {
+        "reference_ns": 432514,
+        "candidate_ns": 17444
+      },
+      {
+        "reference_ns": 588819,
+        "candidate_ns": 19847
+      },
+      {
+        "reference_ns": 416403,
+        "candidate_ns": 20972
+      },
+      {
+        "reference_ns": 369208,
+        "candidate_ns": 13639
+      },
+      {
+        "reference_ns": 351958,
+        "candidate_ns": 11111
+      },
+      {
+        "reference_ns": 460902,
+        "candidate_ns": 15888
+      },
+      {
+        "reference_ns": 365680,
+        "candidate_ns": 13083
+      },
+      {
+        "reference_ns": 352097,
+        "candidate_ns": 11041
+      },
+      {
+        "reference_ns": 352041,
+        "candidate_ns": 131819
+      },
+      {
+        "reference_ns": 348486,
+        "candidate_ns": 12750
+      },
+      {
+        "reference_ns": 314625,
+        "candidate_ns": 9708
+      },
+      {
+        "reference_ns": 320250,
+        "candidate_ns": 11500
+      },
+      {
+        "reference_ns": 422972,
+        "candidate_ns": 9666
+      }
+    ],
+    "reference_median_ns": 369208,
+    "candidate_median_ns": 13639,
+    "improvement_low": 0.9496353292363408,
+    "improvement_high": 0.9662935469133979
+  },
+  {
+    "name": "256/endneedle",
+    "pairs": [
+      {
+        "reference_ns": 355902,
+        "candidate_ns": 51764
+      },
+      {
+        "reference_ns": 377930,
+        "candidate_ns": 85055
+      },
+      {
+        "reference_ns": 328888,
+        "candidate_ns": 44069
+      },
+      {
+        "reference_ns": 321930,
+        "candidate_ns": 42569
+      },
+      {
+        "reference_ns": 386278,
+        "candidate_ns": 49208
+      },
+      {
+        "reference_ns": 330139,
+        "candidate_ns": 47500
+      },
+      {
+        "reference_ns": 325277,
+        "candidate_ns": 41319
+      },
+      {
+        "reference_ns": 319930,
+        "candidate_ns": 41236
+      },
+      {
+        "reference_ns": 400902,
+        "candidate_ns": 43194
+      },
+      {
+        "reference_ns": 302250,
+        "candidate_ns": 40930
+      },
+      {
+        "reference_ns": 302416,
+        "candidate_ns": 40430
+      },
+      {
+        "reference_ns": 370111,
+        "candidate_ns": 40055
+      },
+      {
+        "reference_ns": 305625,
+        "candidate_ns": 40861
+      },
+      {
+        "reference_ns": 304319,
+        "candidate_ns": 41722
+      },
+      {
+        "reference_ns": 312444,
+        "candidate_ns": 106541
+      }
+    ],
+    "reference_median_ns": 325277,
+    "candidate_median_ns": 42569,
+    "improvement_low": 0.8629004432848426,
+    "improvement_high": 0.8726098820020813
+  },
+  {
+    "name": "256/absentneedle",
+    "pairs": [
+      {
+        "reference_ns": 274847,
+        "candidate_ns": 26708
+      },
+      {
+        "reference_ns": 277625,
+        "candidate_ns": 26639
+      },
+      {
+        "reference_ns": 273930,
+        "candidate_ns": 27389
+      },
+      {
+        "reference_ns": 273194,
+        "candidate_ns": 26472
+      },
+      {
+        "reference_ns": 274930,
+        "candidate_ns": 26902
+      },
+      {
+        "reference_ns": 335555,
+        "candidate_ns": 26444
+      },
+      {
+        "reference_ns": 272750,
+        "candidate_ns": 25680
+      },
+      {
+        "reference_ns": 268583,
+        "candidate_ns": 25319
+      },
+      {
+        "reference_ns": 266597,
+        "candidate_ns": 25694
+      },
+      {
+        "reference_ns": 262833,
+        "candidate_ns": 25180
+      },
+      {
+        "reference_ns": 258097,
+        "candidate_ns": 25583
+      },
+      {
+        "reference_ns": 260514,
+        "candidate_ns": 25111
+      },
+      {
+        "reference_ns": 260263,
+        "candidate_ns": 25569
+      },
+      {
+        "reference_ns": 260583,
+        "candidate_ns": 25375
+      },
+      {
+        "reference_ns": 327291,
+        "candidate_ns": 26236
+      }
+    ],
+    "reference_median_ns": 272750,
+    "candidate_median_ns": 25694,
+    "improvement_low": 0.9021496380896956,
+    "improvement_high": 0.9041977225082086
+  },
+  {
+    "name": "131072/clipboard",
+    "pairs": [
+      {
+        "reference_ns": 87975333,
+        "candidate_ns": 14458
+      },
+      {
+        "reference_ns": 78344180,
+        "candidate_ns": 13208
+      },
+      {
+        "reference_ns": 78500069,
+        "candidate_ns": 14055
+      },
+      {
+        "reference_ns": 77978680,
+        "candidate_ns": 11264
+      },
+      {
+        "reference_ns": 84215889,
+        "candidate_ns": 16208
+      },
+      {
+        "reference_ns": 79753194,
+        "candidate_ns": 9319
+      },
+      {
+        "reference_ns": 81146875,
+        "candidate_ns": 17291
+      },
+      {
+        "reference_ns": 78945166,
+        "candidate_ns": 8097
+      },
+      {
+        "reference_ns": 79069666,
+        "candidate_ns": 16139
+      },
+      {
+        "reference_ns": 80180611,
+        "candidate_ns": 8250
+      },
+      {
+        "reference_ns": 79664097,
+        "candidate_ns": 17944
+      },
+      {
+        "reference_ns": 78745805,
+        "candidate_ns": 7486
+      },
+      {
+        "reference_ns": 79367319,
+        "candidate_ns": 19833
+      },
+      {
+        "reference_ns": 80972583,
+        "candidate_ns": 8777
+      },
+      {
+        "reference_ns": 79518083,
+        "candidate_ns": 16875
+      }
+    ],
+    "reference_median_ns": 79518083,
+    "candidate_median_ns": 14055,
+    "improvement_low": 0.9997958888557845,
+    "improvement_high": 0.9998831520152033
+  },
+  {
+    "name": "131072/endneedle",
+    "pairs": [
+      {
+        "reference_ns": 91710805,
+        "candidate_ns": 12687194
+      },
+      {
+        "reference_ns": 91618902,
+        "candidate_ns": 13085736
+      },
+      {
+        "reference_ns": 92078528,
+        "candidate_ns": 12526680
+      },
+      {
+        "reference_ns": 90097541,
+        "candidate_ns": 12454222
+      },
+      {
+        "reference_ns": 92691361,
+        "candidate_ns": 12594708
+      },
+      {
+        "reference_ns": 90358055,
+        "candidate_ns": 12226500
+      },
+      {
+        "reference_ns": 91471736,
+        "candidate_ns": 12611902
+      },
+      {
+        "reference_ns": 99457347,
+        "candidate_ns": 12494083
+      },
+      {
+        "reference_ns": 100319541,
+        "candidate_ns": 12698347
+      },
+      {
+        "reference_ns": 90439333,
+        "candidate_ns": 12385569
+      },
+      {
+        "reference_ns": 90547347,
+        "candidate_ns": 12376236
+      },
+      {
+        "reference_ns": 90035972,
+        "candidate_ns": 12340000
+      },
+      {
+        "reference_ns": 91129319,
+        "candidate_ns": 12327194
+      },
+      {
+        "reference_ns": 89916486,
+        "candidate_ns": 12257888
+      },
+      {
+        "reference_ns": 89815569,
+        "candidate_ns": 12458333
+      }
+    ],
+    "reference_median_ns": 91129319,
+    "candidate_median_ns": 12458333,
+    "improvement_low": 0.8617695681616883,
+    "improvement_high": 0.8641220943988512
+  },
+  {
+    "name": "131072/absentneedle",
+    "pairs": [
+      {
+        "reference_ns": 89654389,
+        "candidate_ns": 12339139
+      },
+      {
+        "reference_ns": 92851722,
+        "candidate_ns": 12414444
+      },
+      {
+        "reference_ns": 89887666,
+        "candidate_ns": 12628222
+      },
+      {
+        "reference_ns": 90154833,
+        "candidate_ns": 12541555
+      },
+      {
+        "reference_ns": 89710375,
+        "candidate_ns": 12599541
+      },
+      {
+        "reference_ns": 89918514,
+        "candidate_ns": 12472083
+      },
+      {
+        "reference_ns": 90369375,
+        "candidate_ns": 12876028
+      },
+      {
+        "reference_ns": 97365833,
+        "candidate_ns": 12966278
+      },
+      {
+        "reference_ns": 97154305,
+        "candidate_ns": 14309944
+      },
+      {
+        "reference_ns": 90322069,
+        "candidate_ns": 14258750
+      },
+      {
+        "reference_ns": 91938138,
+        "candidate_ns": 12397805
+      },
+      {
+        "reference_ns": 90316555,
+        "candidate_ns": 12316055
+      },
+      {
+        "reference_ns": 90763958,
+        "candidate_ns": 12724319
+      },
+      {
+        "reference_ns": 90662944,
+        "candidate_ns": 12466250
+      },
+      {
+        "reference_ns": 90516180,
+        "candidate_ns": 12324264
+      }
+    ],
+    "reference_median_ns": 90369375,
+    "candidate_median_ns": 12541555,
+    "improvement_low": 0.8595531341831979,
+    "improvement_high": 0.8638446297667445
+  }
+]
