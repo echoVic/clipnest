@@ -17,7 +17,27 @@
 
 Finder.app 的真实 NSBundle 名称和 Bundle ID 读取通过；无标识及非字符串标识包被拒绝，不启动所选应用。真实类型查询发现：MyGo 0.7.1 对 `.app` 扩展名解析得到 `com.apple.application-file`，而应用包为 `com.apple.application-bundle`，二者不符合。因此选择器使用明确的应用包 UTI，并保留原生 NSOpenPanel sheet。
 
-独立测试应用使用临时数据目录、独立 Bundle ID，始终暂停采集。真实选择器打开、取消、取消后列表不变及按钮恢复可用已验证。Computer Use 未能操作系统文件列表完成确认选择，因此**原生选择确认、实际编辑规则到版本消耗及退出取消 sheet 的完整端到端流程未验收**；不把元数据、UTI 和派发测试视为这些流程的完整验收。
+原生验收入口为 `scripts/test-native-exclusions.py`，宿主和 AppKit 驱动位于 `testdata/native-exclusions/`。2026-10-28 在 macOS 26.6.2 上实际执行，7 项检查全部通过：
+
+| 进程 | 验收行为 |
+| --- | --- |
+| `manage` | 原生取消后规则、文件和剪贴板版本不变；实际选择应用并确认，校验名称、Bundle ID、0600 文件权限、设置显示及当前版本消耗 |
+| `restart` | 使用上一进程的同一数据目录恢复规则；再次实际确认同一应用，不重复也不消耗版本；通过原生移除按钮清除磁盘和界面规则，并消耗当前版本 |
+| `quit-open` | 选择器仍打开时退出，原生取消路径使添加工作线程正常返回 |
+| `quit-confirm` | 实际点击“添加”，在 AppKit URL 验证回调中排队原生退出，添加工作线程正常返回，无崩溃或竞态报告 |
+
+每项同时核对暂停状态、历史正文、常用语和既有会话。历史检查既读取原有会话快照，也打开完成写入后的新数据库视图，避免旧 SQLite 快照掩盖真实数据丢失。退出超时报告独立于工作线程持有的报告，避免失败路径出现报告读写竞态。
+
+宿主使用独立 Bundle ID、临时 SQLite 数据和临时应用包，暂停采集，不启动监听或全局快捷键。启动器复制应用源码，仅将选择器的初始 `/Applications` 目录改为临时应用所在目录；应用包类型过滤、原生完成回调、元数据读取、规则持久化和版本消耗均使用应用实现。测试驱动通过公开 `NSOpenSavePanelDelegate` 观察用户确认的真实路径，返回 YES，不保留面板，不合成选择结果；退出场景只给原有设置添加动作包一层工作线程完成通知。读取设置的辅助功能树前完成 AppKit 已排队的绘制，不注入设置刷新。
+
+系统文件列表由独立 Open/Save Panel Service 托管。复跑时由操作者或可信外部 UI 工具实际选中临时应用并点击“添加”；宿主输出 `*.phase.json` 表示等待确认，其他动作及断言自动执行。每个进程最多一次实际确认。默认确认期限为 180 秒，可用 `--ui-timeout` 延长；超时或退出失败返回非零并保留报告、日志和仅含测试窗口的辅助功能诊断。
+
+```sh
+python3 scripts/test-native-exclusions.py --ui-timeout 600 --output build/native-exclusions-e2e
+python3 scripts/test-native-exclusions.py --negative-control --ui-timeout 600 --output build/native-exclusions-negative
+```
+
+第二条是错误对照，预期退出码为 1：实际选择和确认仍完成，但刻意错误的预期 Bundle ID 触发 `confirmed selection mismatch`。本轮已验证该失败，不会把仅关闭面板或已有规则视为确认成功。正向报告保存在 `build/native-exclusions-verified-final/native-exclusions-results.json`，错误对照报告保存在 `build/native-exclusions-negative/native-exclusions-results.json`；构建与运行产物不提交到 Git。
 
 `ui.NewTester` 验证隐私分组、名称和 ID、添加与按 ID 移除、忙碌禁用、非 macOS 不提供选择器、版本和更新入口及保留策略草稿。520 像素宽的深浅色渲染已检查，长 Bundle ID 正常换行。原生布局检查使用 UI 渲染器；真实窗口另外核验浅色设置页。
 
