@@ -1,6 +1,6 @@
 # v0.1.7 应用排除验证
 
-状态：开发版，尚未生成正式签名或公证安装包。设计与实施范围见 [设计](superpowers/specs/2026-10-28-app-exclusions-design.md) 和 [计划](superpowers/plans/2026-10-28-app-exclusions.md)。
+状态：v0.1.7 正式安装包已完成签名、公证及更新包验证。设计与实施范围见 [设计](superpowers/specs/2026-10-28-app-exclusions-design.md) 和 [计划](superpowers/plans/2026-10-28-app-exclusions.md)。
 
 ## 核心行为
 
@@ -60,4 +60,16 @@ git diff --check
 
 `CGO_ENABLED=0 go build` 分别检查 darwin/arm64、darwin/amd64、linux/amd64、windows/amd64，通过。交叉编译不代表在 Intel、Linux 或 Windows 上完成运行验收。
 
-来源仍按检测时的前台应用判断，不能保证后台复制或快速切换时识别真实写入者。正式发布时仍需按项目流程签名、公证、验证更新包，并同步独立 echovic-apps 官网的中英文说明及版本兜底信息。
+## 正式安装包与自动更新
+
+2026-10-28 再次执行 Go 竞态测试、61 项前端测试、两项静态检查及差异空白检查，全部通过。随后用项目发布脚本生成 Universal DMG：
+
+- 应用版本为 0.1.7，Bundle ID 为 `app.clipnest.desktop`；Info.plist 及 arm64、x86_64 两份 Mach-O 均要求 macOS 13.0。
+- Developer ID 签名、Apple 公证、应用与 DMG 的 Gatekeeper 检查、stapler 验证通过。
+- DMG 为 13,145,741 字节，官网显示 13 MB；SHA-256 为 `fc5b1cd719242ec4480973e5210414528ea7d1cac5899760a4c08beb5e59e7ab`。全部发布资产通过 `SHA256SUMS` 校验。
+- 完整更新包为 17,088,901 字节；0.1.6 → 0.1.7 增量包为 1,981,248 字节，同时生成 0.1.5 和 0.1.4 的增量包。完整包及三个增量包均使用配置中的 Ed25519 公钥验证大小和签名，篡改摘要会被拒绝；清单的更新说明与本版 CHANGELOG 一致。
+- 使用 MyGo 的实际解包与增量应用代码，在隔离目录将 0.1.6 升级至 0.1.7。结果与完整包逐项比较路径、内容、权限及符号链接，全部一致。移除旧包的 `Contents/CodeResources` stapled ticket 后再次应用，仍完整一致；完整包和两份增量结果的代码签名、Gatekeeper 与 stapled ticket 验证均通过，不替换用户安装的应用。
+
+本地更新验证摘要位于 `build/darwin-universal/update-validation.json`，构建产物不提交到 Git。独立 echovic-apps 官网同步中英文应用排除说明、设置路径、版本和安装包兜底；完全离线构建时也保留本版 DMG 直链。
+
+来源仍按检测时的前台应用判断，不能保证后台复制或快速切换时识别真实写入者。

@@ -2,7 +2,7 @@
 
 一个 Mac 优先的剪贴板历史面板。正常复制，随时找回；用数字、方向键、滚轮选择，确认后回到原应用粘贴。
 
-当前分支为 **0.1.7 开发版**，新增按应用排除记录；最新正式版为 **0.1.6**。剪贴板记录权限、分组原生设置、SQLite 存储、历史保留策略、虚拟列表和搜索优化继续保留。正式版下载见 [GitHub Releases](https://github.com/echoVic/clipnest/releases)，改动记录见 [CHANGELOG](CHANGELOG.md)。
+当前正式版为 **0.1.7**，新增按应用排除记录。剪贴板记录权限、分组原生设置、SQLite 存储、历史保留策略、虚拟列表和搜索优化继续保留。正式版下载见 [GitHub Releases](https://github.com/echoVic/clipnest/releases)，改动记录见 [CHANGELOG](CHANGELOG.md)。
 
 ## 使用
 
@@ -67,7 +67,7 @@ macOS 15.4 起提供剪贴板访问策略 API；系统是否启用询问由 macO
 
 记录权限与自动粘贴所需的辅助功能权限独立。打开面板、打开偏好设置或恢复记录不会主动请求记录授权；权限变化会在下一次轮询生效，不重排已经打开的列表。暂停记录及敏感标记过滤仍然优先。
 
-### 按应用排除记录（0.1.7 开发版）
+### 按应用排除记录
 
 在「偏好设置 → 隐私 → 排除应用」点「添加应用…」，选择一个 `.app`，即可跳过该应用的新复制。列表显示应用名称及 Bundle ID，点「移除」后从下一次复制重新判断。最多保存 128 个应用；重新选择同一 Bundle ID 只更新名称，不产生重复规则。
 
@@ -100,9 +100,9 @@ macOS 15.4 起提供剪贴板访问策略 API；系统是否启用询问由 macO
 
 macOS 原生功能基于 MyGo、purego、AppKit / ApplicationServices，无 cgo，无 AppleScript 子进程。已支持菜单栏、全局快捷键、剪贴板采集、辅助功能检测、应用激活与粘贴按键。
 
-Release 提供 Intel / Apple Silicon 通用安装包，使用 Apple Developer ID 签名并通过 Apple 公证；SHA-256 校验值见对应 Release 页面。**0.1.6 要求 macOS 13 或更高版本**，与 Go 工具链生成的二进制最低系统版本一致。
+Release 提供 Intel / Apple Silicon 通用安装包，使用 Apple Developer ID 签名并通过 Apple 公证；SHA-256 校验值见对应 Release 页面。**0.1.7 要求 macOS 13 或更高版本**，与 Go 工具链生成的二进制最低系统版本一致。
 
-当前开发与验证在 macOS（Apple M2 Pro）进行。验证包含 Go 竞态测试、静态检查、61 项前端测试和 MyGo 原生设置、权限弹窗交互测试；独立 WKWebView 程序验证了万条历史的分页、中文搜索、详情、过期请求拒绝和面板关闭重开。macOS Intel、Linux、Windows 另有交叉编译检查，未在这些目标系统运行测试。0.1.7 的规则、原生选择器及演示验证边界见 [应用排除验证记录](docs/app-exclusions-validation.md)。
+当前开发与验证在 macOS（Apple M2 Pro）进行。验证包含 Go 竞态测试、静态检查、61 项前端测试和 MyGo 原生设置、权限弹窗交互测试；应用排除另有 7 项真实原生验收，覆盖选择确认、取消、落盘、重启、去重、移除及退出，并通过错误 Bundle ID 对照验证断言。独立 WKWebView 程序验证了万条历史的分页、中文搜索、详情、过期请求拒绝和面板关闭重开。macOS Intel、Linux、Windows 另有交叉编译检查，未在这些目标系统运行测试。0.1.7 的规则、原生选择器及演示验证边界见 [应用排除验证记录](docs/app-exclusions-validation.md)。
 
 浏览器演示和独立原生探针不等于完整的跨应用真实粘贴、多显示器和权限授权验收；这些流程仍需在各自环境验证。
 
