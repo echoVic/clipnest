@@ -4,8 +4,11 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"github.com/ebitengine/purego"
 	"os"
+	"path/filepath"
+	"strings"
 	"unsafe"
 )
 
@@ -15,6 +18,7 @@ type nativeBridge struct {
 	selector      func(string) uintptr
 	msg           uintptr
 	stringPointer func(uintptr, uintptr) *byte
+	makeString    func(uintptr, uintptr, string) uintptr
 	trusted       func() bool
 	createKey     func(uintptr, uint16, bool) uintptr
 	setFlags      func(uintptr, uint64)
@@ -24,8 +28,9 @@ type nativeBridge struct {
 	release       func(uintptr)
 }
 type targetApp struct {
-	PID  int
-	Name string
+	PID      int
+	Name     string
+	BundleID string
 }
 
 func openNative() (*nativeBridge, error) {
@@ -48,6 +53,7 @@ func openNative() (*nativeBridge, error) {
 		return nil, err
 	}
 	purego.RegisterFunc(&n.stringPointer, n.msg)
+	purego.RegisterFunc(&n.makeString, n.msg)
 	purego.RegisterLibFunc(&n.trusted, services, "AXIsProcessTrusted")
 	purego.RegisterLibFunc(&n.createKey, services, "CGEventCreateKeyboardEvent")
 	purego.RegisterLibFunc(&n.setFlags, services, "CGEventSetFlags")
@@ -90,7 +96,40 @@ func (n *nativeBridge) Target() targetApp {
 	if pid == os.Getpid() {
 		return targetApp{}
 	}
-	return targetApp{pid, n.text(n.send(a, "localizedName"))}
+	return targetApp{PID: pid, Name: n.text(n.send(a, "localizedName")), BundleID: n.text(n.send(a, "bundleIdentifier"))}
+}
+
+// Read an application's bundle metadata without launching or loading its code.
+func (n *nativeBridge) Application(path string) (ExcludedApp, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return ExcludedApp{}, err
+	}
+	if !info.IsDir() || !strings.EqualFold(filepath.Ext(path), ".app") {
+		return ExcludedApp{}, errors.New("请选择有效的 .app 应用")
+	}
+	defer n.pool()()
+	nsString := func(value string) uintptr {
+		return n.makeString(n.getClass("NSString"), n.selector("stringWithUTF8String:"), value)
+	}
+	bundle := n.send(n.getClass("NSBundle"), "bundleWithPath:", nsString(path))
+	app := ExcludedApp{BundleID: n.text(n.send(bundle, "bundleIdentifier"))}
+	for _, key := range []string{"CFBundleDisplayName", "CFBundleName"} {
+		value := n.send(bundle, "objectForInfoDictionaryKey:", nsString(key))
+		if value != 0 && n.send(value, "isKindOfClass:", n.getClass("NSString")) != 0 {
+			app.Name = n.text(value)
+			if strings.TrimSpace(app.Name) != "" {
+				break
+			}
+		}
+	}
+	if strings.TrimSpace(app.Name) == "" {
+		app.Name = strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+	}
+	if err := app.validate(); err != nil {
+		return ExcludedApp{}, fmt.Errorf("应用信息无效：%w", err)
+	}
+	return app, nil
 }
 func (n *nativeBridge) Activate(t targetApp) bool {
 	defer n.pool()()

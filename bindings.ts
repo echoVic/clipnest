@@ -24,6 +24,11 @@ export interface Entry {
   height?: number;
 }
 
+export interface ExcludedApp {
+  bundleID: string;
+  name: string;
+}
+
 export interface HistoryPage {
   entries: Entry[];
   total: number;
@@ -81,6 +86,9 @@ export type ThemeSource = "system" | "light" | "dark";
 
 /** Desktop's fields are main-thread-only; persistence has its own locks. */
 export const Desktop = {
+  addExcludedApp(): Promise<ExcludedApp[]> {
+    return call("Desktop.AddExcludedApp");
+  },
   /**
    * CheckForUpdates opens the update window, which says when Clipnest is up to
    * date or offers the new version.
@@ -112,6 +120,9 @@ export const Desktop = {
   },
   dismiss(): Promise<void> {
     return call("Desktop.Dismiss");
+  },
+  excludedApps(): Promise<ExcludedApp[]> {
+    return call("Desktop.ExcludedApps");
   },
   /**
    * InsertPhrase pastes a phrase the way Choose pastes an entry. newEntry yields
@@ -156,6 +167,9 @@ export const Desktop = {
   },
   promptPastePermission(session: number): Promise<string> {
     return call("Desktop.PromptPastePermission", session);
+  },
+  removeExcludedApp(bundleID: string): Promise<ExcludedApp[]> {
+    return call("Desktop.RemoveExcludedApp", bundleID);
   },
   /**
    * A user-initiated recording action lets the OS ask for programmatic access.

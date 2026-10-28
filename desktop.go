@@ -49,9 +49,13 @@ type Desktop struct {
 	session               uint64
 	target                targetApp
 	lastRevision          int64
+	observedRevision      int64
+	observedSource        targetApp
+	sourceObserved        bool
 	lastID                string
 	clipboardAccess       ClipboardAccess
 	preferences           *preferencesWindow
+	appPicker             *applicationPicker
 	permission            *permissionWindow
 	appearanceInitialized bool
 	notice                string

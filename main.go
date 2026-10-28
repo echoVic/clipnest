@@ -91,7 +91,7 @@ func main() {
 		}
 	})
 	mygo.App.WhenReady(d.ready)
-	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) { d.quitting = true; d.cancelPermission(); d.closeView(); close(d.stop) })
+	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) { d.quitting = true; d.cancelPermission(); d.cancelExclusions(); d.closeView(); close(d.stop) })
 	mygo.App.OnWillQuit(func(*mygo.QuitEvent) {
 		_ = h.Save()
 		mygo.GlobalShortcut.UnregisterAll()

@@ -3,8 +3,10 @@ package main
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"image"
 	"image/png"
+	"runtime"
 	"testing"
 
 	"github.com/egoist/mygo/transfer"
@@ -21,6 +23,7 @@ type testClipboard struct {
 	reads     int
 	onRead    func()
 	onFormats func()
+	source    targetApp
 }
 
 func (c *testClipboard) Revision() int64                  { return c.revision }
@@ -32,7 +35,12 @@ func (c *testClipboard) Formats() []transfer.Format {
 	}
 	return c.portable
 }
-func (c *testClipboard) Target() targetApp { return targetApp{Name: "Test app"} }
+func (c *testClipboard) Target() targetApp {
+	if c.source == (targetApp{}) {
+		return targetApp{Name: "Test app"}
+	}
+	return c.source
+}
 func (c *testClipboard) ReadFormat(transfer.Format) ([]byte, error) {
 	c.reads++
 	if c.onRead != nil {
@@ -55,7 +63,7 @@ func clipboardDesktop(t *testing.T) *Desktop {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = s.Close() })
-	return &Desktop{h: s.History, lastRevision: -2}
+	return &Desktop{h: s.History, storage: s, lastRevision: -2}
 }
 
 func clipboardHistoryCount(t *testing.T, d *Desktop) int {
@@ -219,5 +227,83 @@ func TestClipboardMetadataChangeStopsBeforeContentRead(t *testing.T) {
 				t.Fatal("metadata change still caused a content read", captured, err, c.reads)
 			}
 		})
+	}
+}
+
+func TestClipboardExclusionsStopTextImagesAndExplicitReads(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("application attribution is macOS-only")
+	}
+	for _, kind := range []string{"text", "png", "tiff"} {
+		for _, request := range []bool{false, true} {
+			t.Run(kind+fmt.Sprint(request), func(t *testing.T) {
+				d := clipboardDesktop(t)
+				d.storage.Exclusions.Add(ExcludedApp{"com.private", "Private"})
+				c := &testClipboard{access: clipboardAllowed, revision: 1, source: targetApp{Name: "Private", BundleID: "com.private"}, text: []byte("secret")}
+				switch kind {
+				case "text":
+					c.portable = []transfer.Format{transfer.Text}
+				case "png":
+					c.portable = []transfer.Format{transfer.PNG}
+				case "tiff":
+					c.formats = []string{"public.tiff"}
+				}
+				if captured, err := d.captureFrom(c, request); captured || err != nil || c.reads != 0 || clipboardHistoryCount(t, d) != 0 {
+					t.Fatal("excluded application content read", captured, err, c.reads)
+				}
+				c.source = targetApp{Name: "Allowed", BundleID: "com.allowed"}
+				d.storage.Exclusions.Remove("com.private")
+				if captured, err := d.captureFrom(c, true); captured || err != nil || c.reads != 0 {
+					t.Fatal("old excluded revision recaptured", captured, err)
+				}
+				c.revision++
+				c.portable, c.formats = []transfer.Format{transfer.Text}, nil
+				if captured, err := d.captureFrom(c, false); !captured || err != nil || c.reads != 1 {
+					t.Fatal("new allowed copy not recorded", captured, err)
+				}
+			})
+		}
+	}
+}
+
+func TestClipboardExclusionsRetainSourceWhileWaitingForPermission(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("application attribution is macOS-only")
+	}
+	for _, excluded := range []bool{false, true} {
+		t.Run(fmt.Sprint(excluded), func(t *testing.T) {
+			d := clipboardDesktop(t)
+			d.storage.Exclusions.Add(ExcludedApp{"com.private", "Private"})
+			source := targetApp{Name: "Allowed", BundleID: "com.allowed"}
+			if excluded {
+				source = targetApp{Name: "Private", BundleID: "com.private"}
+			}
+			c := &testClipboard{access: clipboardAsk, revision: 1, source: source, portable: []transfer.Format{transfer.Text}, text: []byte("original source")}
+			d.captureFrom(c, false)
+			c.source = targetApp{Name: "Settings", BundleID: "app.clipnest.desktop"}
+			captured, err := d.captureFrom(c, true)
+			if err != nil || captured == excluded || c.reads != btoi(!excluded) {
+				t.Fatal("deferred read was attributed to settings", captured, err, c.reads)
+			}
+			if !excluded {
+				v, _ := d.h.OpenView()
+				defer v.Close()
+				page, _ := v.Page("", "", 0, 50)
+				if page.Entries[0].Source != source.Name {
+					t.Fatal("lost original source name", page.Entries)
+				}
+			}
+		})
+	}
+}
+
+func TestClipboardExclusionsUnknownSourceSkipsOnMacOS(t *testing.T) {
+	d := clipboardDesktop(t)
+	d.storage.Exclusions.Add(ExcludedApp{"com.private", "Private"})
+	c := &testClipboard{access: clipboardAllowed, revision: 1, portable: []transfer.Format{transfer.Text}, text: []byte("unknown")}
+	captured, err := d.captureFrom(c, false)
+	want := runtime.GOOS != "darwin"
+	if err != nil || captured != want || c.reads != btoi(want) {
+		t.Fatal("unknown source policy ignored", captured, err)
 	}
 }

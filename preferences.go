@@ -19,6 +19,7 @@ type PreferencesState struct {
 	Storage         StorageStatus    `json:"storage"`
 	Platform        string           `json:"platform"`
 	Version         string           `json:"version"`
+	ExcludedApps    []ExcludedApp    `json:"excludedApps"`
 }
 
 type preferencesWindow struct {
@@ -68,7 +69,7 @@ func (d *Desktop) preferencesState() PreferencesState {
 	return PreferencesState{
 		Appearance: mygo.Theme.Source(), Paused: d.h.IsPaused(), Accessible: d.n.Accessible(),
 		ClipboardAccess: d.clipboardAccess, Shortcut: d.shortcut, Storage: d.StorageStatus(),
-		Platform: runtime.GOOS, Version: applicationVersion(),
+		Platform: runtime.GOOS, Version: applicationVersion(), ExcludedApps: d.ExcludedApps(),
 	}
 }
 
@@ -108,6 +109,12 @@ func newPreferencesWindow(d *Desktop) *preferencesWindow {
 		},
 		clipboardSettings: d.OpenClipboardPermission,
 		accessibility:     d.OpenPermission,
+		addExcludedApp: func() {
+			p.run(func() error { _, err := d.AddExcludedApp(); return err }, "", false)
+		},
+		removeExcludedApp: func(id string) {
+			p.run(func() error { _, err := d.RemoveExcludedApp(id); return err }, "已移除，下一次复制重新判断", false)
+		},
 		migrate: func() {
 			p.run(func() error { _, err := d.MigrateStorage(); return err }, "本地存储已更新", false)
 		},

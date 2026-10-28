@@ -21,13 +21,14 @@ type StorageStatus struct {
 // Storage owns the shared database; history and phrases keep their existing
 // distinct commit semantics. The data-directory lock must be held by main.
 type Storage struct {
-	History *History
-	Phrases *Phrases
-	dir     string
-	mu      sync.Mutex
-	sqlite  atomic.Bool
-	cleanup atomic.Bool
-	closed  bool
+	History    *History
+	Phrases    *Phrases
+	Exclusions *appExclusions
+	dir        string
+	mu         sync.Mutex
+	sqlite     atomic.Bool
+	cleanup    atomic.Bool
+	closed     bool
 }
 
 func openStorage(dir string) (*Storage, error) {
@@ -36,6 +37,10 @@ func openStorage(dir string) (*Storage, error) {
 		return nil, err
 	}
 	if err := os.MkdirAll(dir, 0700); err != nil {
+		return nil, err
+	}
+	exclusions, err := openAppExclusions(filepath.Join(dir, "excluded-apps.json"))
+	if err != nil {
 		return nil, err
 	}
 	legacy := false
@@ -57,7 +62,7 @@ func openStorage(dir string) (*Storage, error) {
 		if err != nil {
 			return nil, err
 		}
-		s := &Storage{dir: dir, History: h, Phrases: openPhrases(filepath.Join(dir, "phrases.json"))}
+		s := &Storage{dir: dir, History: h, Phrases: openPhrases(filepath.Join(dir, "phrases.json")), Exclusions: exclusions}
 		if !legacy {
 			if _, err := s.Migrate(); err != nil {
 				s.Close()
@@ -87,7 +92,7 @@ func openStorage(dir string) (*Storage, error) {
 		db.db.Close()
 		return nil, err
 	}
-	s := &Storage{dir: dir, History: &History{db: db, paused: paused}, Phrases: &Phrases{db: db, items: phrases}}
+	s := &Storage{dir: dir, History: &History{db: db, paused: paused}, Phrases: &Phrases{db: db, items: phrases}, Exclusions: exclusions}
 	s.sqlite.Store(true)
 	s.cleanup.Store(legacy)
 	if err := s.History.Cleanup(); err != nil {

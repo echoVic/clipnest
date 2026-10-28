@@ -14,6 +14,8 @@ type preferencesActions struct {
 	request           func()
 	clipboardSettings func() error
 	accessibility     func() error
+	addExcludedApp    func()
+	removeExcludedApp func(string)
 	migrate           func()
 	saveRetention     func(RetentionPolicy)
 	clear             func()
@@ -196,6 +198,7 @@ func (v *preferencesView) privacy(c *ui.Context) {
 			})
 		})
 	})
+	v.exclusions(c)
 	v.group(c, "自动粘贴", func() {
 		v.row(c, "辅助功能", "允许后，选完即可粘贴到原应用；未授权时仍可「仅复制」。", func() {
 			switch {

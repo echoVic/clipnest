@@ -124,8 +124,24 @@ func (d *Desktop) captureFrom(c clipboardReader, request bool) (bool, error) {
 		d.lastRevision = rev
 		return false, nil
 	}
-	if !d.clipboardAccess.permitsRead(request) || (rev >= 0 && rev == d.lastRevision) {
+	if rev >= 0 && rev == d.lastRevision {
 		return false, nil
+	}
+	// Cache metadata even while policy prevents a read. Opening settings later
+	// must not turn the same copy into content attributed to Clipnest.
+	if !d.sourceObserved || rev < 0 || rev != d.observedRevision {
+		d.observedSource, d.observedRevision, d.sourceObserved = c.Target(), rev, true
+	}
+	if !d.clipboardAccess.permitsRead(request) {
+		return false, nil
+	}
+	source := d.observedSource
+	if runtime.GOOS == "darwin" && d.storage != nil {
+		rules := d.storage.Exclusions
+		if rules.Contains(source.BundleID) || (source.BundleID == "" && len(rules.List()) > 0) {
+			d.lastRevision = rev
+			return false, nil
+		}
 	}
 	formats := c.AvailableFormats()
 	for _, f := range formats {
@@ -141,7 +157,6 @@ func (d *Desktop) captureFrom(c clipboardReader, request bool) (bool, error) {
 		d.lastRevision = rev
 		return false, nil
 	}
-	source := c.Target().Name
 	// Metadata queries can race a new copy or a permission change. Check again
 	// immediately before the operation that can trigger a system prompt.
 	d.clipboardAccess = c.ClipboardAccess()
@@ -154,11 +169,11 @@ func (d *Desktop) captureFrom(c clipboardReader, request bool) (bool, error) {
 		if readErr != nil {
 			return false, readErr
 		}
-		e, err = newEntry(string(data), nil, source)
+		e, err = newEntry(string(data), nil, source.Name)
 	} else if slices.Contains(portable, transfer.PNG) || slices.Contains(formats, "public.tiff") {
 		data := c.ReadImage()
 		d.clipboardAccess = c.ClipboardAccess()
-		e, err = newEntry("", data, source)
+		e, err = newEntry("", data, source.Name)
 	} else {
 		d.lastRevision = rev
 		return false, nil
