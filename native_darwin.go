@@ -106,12 +106,15 @@ func (n *nativeBridge) Revision() int64 {
 }
 func (n *nativeBridge) Accessible() bool { return n.trusted() }
 func (n *nativeBridge) ReadyToPaste(t targetApp) bool {
-	if n.Target().PID != t.PID || n.flags(1)&((1<<17)|(1<<18)|(1<<19)|(1<<20)) != 0 {
+	return pasteInputReady(t.PID, n.Target().PID, n.flags(1), func(key uint16) bool { return n.keyDown(1, key) })
+}
+func pasteInputReady(targetPID, frontPID int, flags uint64, keyDown func(uint16) bool) bool {
+	if frontPID != targetPID || flags&((1<<17)|(1<<18)|(1<<19)|(1<<20)) != 0 {
 		return false
 	}
 	// Wait for V, Return and the number keys (including the numeric keypad).
 	for _, key := range []uint16{9, 36, 18, 19, 20, 21, 23, 22, 26, 28, 25, 76, 83, 84, 85, 86, 87, 88, 89, 91, 92} {
-		if n.keyDown(1, key) {
+		if keyDown(key) {
 			return false
 		}
 	}

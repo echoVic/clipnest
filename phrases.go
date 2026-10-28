@@ -3,10 +3,8 @@ package main
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"slices"
 	"strings"
@@ -34,8 +32,10 @@ func (p Phrase) summary() Phrase {
 type Phrases struct {
 	mu     sync.Mutex
 	path   string
+	db     *sqliteStore
 	items  []Phrase
 	broken error
+	write  func(string, any) error // nil uses the production durable writer
 }
 type phraseArchive struct {
 	Version int      `json:"version"`
@@ -68,16 +68,12 @@ func openPhrases(path string) *Phrases {
 	return p
 }
 func readPhrases(path string) ([]Phrase, error) {
-	f, err := os.Open(path)
+	var a phraseArchive
+	err := decodePrivateJSON(path, &a)
 	if errors.Is(err, os.ErrNotExist) {
 		return []Phrase{}, nil
 	}
 	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	var a phraseArchive
-	if err := json.NewDecoder(io.LimitReader(f, 256<<20)).Decode(&a); err != nil {
 		return nil, err
 	}
 	if a.Version != 1 || len(a.Phrases) > maxPhrases {
@@ -198,7 +194,22 @@ func (p *Phrases) Move(id string, delta int) error {
 
 // commit makes items current only after they are safely on disk.
 func (p *Phrases) commit(items []Phrase) error {
-	if err := writePrivateJSON(p.path, phraseArchive{1, items}); err != nil {
+	if p.db != nil {
+		if err := p.db.savePhrases(items); err != nil {
+			return fmt.Errorf("常用语保存失败：%w", err)
+		}
+		p.items = items
+		return nil
+	}
+	write := p.write
+	if write == nil {
+		write = writePrivateJSON
+	}
+	if err := write(p.path, phraseArchive{1, items}); err != nil {
+		if writeReplaced(err) {
+			p.items = items
+			p.broken = fmt.Errorf("常用语已经更新，但磁盘确认失败；已停止后续修改，请重新启动后检查：%w", err)
+		}
 		return fmt.Errorf("常用语保存失败：%w", err)
 	}
 	p.items = items

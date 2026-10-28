@@ -193,7 +193,7 @@ func TestPhraseBindingsUseTheStore(t *testing.T) {
 		t.Fatal("PhraseDetail must return the full text")
 	}
 	// The lookup fails before anything touches the clipboard.
-	if _, err := d.InsertPhrase("missing", true); err == nil || err.Error() != "这条常用语已删除" {
+	if _, err := d.InsertPhrase(0, "missing", true); err == nil || err.Error() != "这条常用语已删除" {
 		t.Fatal("inserting a deleted phrase must fail")
 	}
 	if err := d.MovePhrase(saved.ID, 1); err != nil {

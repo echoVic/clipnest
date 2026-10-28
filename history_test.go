@@ -26,7 +26,12 @@ func TestHistoryDedupAndFrozenPanel(t *testing.T) {
 	h.Add(a)
 	h.Add(b)
 	frozen, _ := h.Snapshot()
-	d := Desktop{entries: frozen, session: 7}
+	v, err := h.OpenView()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer v.Close()
+	d := Desktop{view: v, session: 7}
 	h.Add(c)
 	h.Add(a)
 	latest, _ := h.Snapshot()
@@ -36,13 +41,17 @@ func TestHistoryDedupAndFrozenPanel(t *testing.T) {
 	if frozen[0].ID != b.ID || frozen[1].ID != a.ID {
 		t.Fatal("open panel order changed")
 	}
-	if got, err := d.find(7, b.ID); err != nil || got.Text != "beta" {
+	current, err := d.panelView(7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := current.Detail(b.ID); err != nil || got.Text != "beta" {
 		t.Fatal("snapshot content lost")
 	}
-	if _, err := d.find(6, b.ID); err == nil {
+	if _, err := d.panelView(6); err == nil {
 		t.Fatal("stale session accepted")
 	}
-	if _, err := d.find(7, c.ID); err == nil {
+	if _, err := current.Detail(c.ID); err == nil {
 		t.Fatal("new content leaked into frozen panel")
 	}
 }

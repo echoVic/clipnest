@@ -15,6 +15,11 @@ func TestUpdateConfiguration(t *testing.T) {
 		t.Fatal(err)
 	}
 	var config struct {
+		Slug  string `json:"slug"`
+		MacOS struct {
+			MinimumSystemVersion string         `json:"minimumSystemVersion"`
+			InfoPlist            map[string]any `json:"infoPlist"`
+		} `json:"macos"`
 		Updates struct {
 			GitHub     string  `json:"github"`
 			PublicKey  string  `json:"publicKey"`
@@ -32,5 +37,14 @@ func TestUpdateConfiguration(t *testing.T) {
 	}
 	if config.Updates.PrivateKey != nil {
 		t.Error("updates.privateKey must not be configured: release builds get the key from MYGO_UPDATER_PRIVATE_KEY")
+	}
+	if config.Slug != "clipnest" {
+		t.Fatal("distribution filenames must keep the clipnest slug")
+	}
+	if config.MacOS.InfoPlist["LSUIElement"] != true {
+		t.Fatal("packaged menu-bar app must stay out of Dock from startup")
+	}
+	if config.MacOS.MinimumSystemVersion != "13.0" {
+		t.Fatal("bundle minimum must match Go 1.27's macOS 13 binary target")
 	}
 }

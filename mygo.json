@@ -1,11 +1,16 @@
 {
   "name": "Clipnest",
+  "slug": "clipnest",
   "identifier": "app.clipnest.desktop",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "frontendDist": "web",
   "out": "build",
   "bindings": "bindings.ts",
   "macos": {
+    "minimumSystemVersion": "13.0",
+    "infoPlist": {
+      "LSUIElement": true
+    },
     "signingIdentity": "Developer ID Application: Zijie Hu (8LH7PFQJ89)",
     "notarize": {
       "keychainProfile": "clipnest-notary"

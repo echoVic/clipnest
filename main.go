@@ -1,45 +1,23 @@
 package main
 
 import (
-	"bytes"
 	"embed"
 	"flag"
 	"github.com/egoist/mygo"
 	_ "github.com/egoist/mygo/locales/zh-Hans"
 	"github.com/egoist/mygo/plugins/updater"
-	"image"
-	"image/color"
-	"image/png"
 	"io/fs"
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"time"
 )
 
 //go:embed web
 var frontend embed.FS
 
-func trayIcon() []byte {
-	im := image.NewNRGBA(image.Rect(0, 0, 32, 32))
-	c := color.NRGBA{104, 83, 220, 255}
-	if runtime.GOOS == "darwin" {
-		c = color.NRGBA{0, 0, 0, 255}
-	}
-	for y := 4; y < 28; y++ {
-		for x := 5; x < 27; x++ {
-			if (x < 8 || x >= 24 || y < 7 || y >= 25) || (y >= 12 && y <= 14 && x >= 11 && x < 21) || (y >= 18 && y <= 20 && x >= 11 && x < 18) {
-				im.SetNRGBA(x, y, c)
-			}
-		}
-	}
-	var b bytes.Buffer
-	_ = png.Encode(&b, im)
-	return b.Bytes()
-}
 func main() {
 	webAddress := flag.String("web", "", "启动仅含示例数据的浏览器交互演示")
 	dataDir := flag.String("data-dir", "", "历史与常用语的存储目录")
@@ -80,81 +58,30 @@ func main() {
 		}
 		dir = filepath.Join(base, "Clipnest")
 	}
-	h, err := openHistory(filepath.Join(dir, "history.json"))
+	unlock, err := acquireDataLock(dir)
 	if err != nil {
 		log.Fatal(err)
 	}
-	d := &Desktop{h: h, p: openPhrases(filepath.Join(dir, "phrases.json")), lastRevision: -2, stop: make(chan struct{}), shortcut: "⌘ ⇧ V"}
-	// 自动检查更新的频率：4 小时一次（默认一天），新发布的版本当天就能被看到。
+	defer unlock()
+	store, err := openStorage(dir)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func() {
+		if err := store.Close(); err != nil {
+			log.Print("存储关闭失败：", err)
+		}
+	}()
+	h := store.History
+	d := &Desktop{h: h, p: store.Phrases, storage: store, lastRevision: -2, stop: make(chan struct{}), shortcut: "⌘ ⇧ V"}
 	mygo.Use(updater.New(updater.Options{Interval: 4 * time.Hour}))
 	mygo.SetFrontend(web)
 	mygo.Bind(d)
-	mygo.App.WhenReady(func() {
-		d.n, err = openNative()
-		if err != nil {
-			log.Fatal("无法初始化系统剪贴板：", err)
-		}
-		d.win = mygo.NewWindow(mygo.WindowOptions{
-			Title: "Clipnest · 剪贴板历史", URL: "/", Width: 860, Height: 570,
-			Panel: true, Hidden: true, Frameless: true, DisableResize: true,
-			Transparent: true, BackgroundColor: "#00000000",
-		})
-		d.win.SetMenu(mygo.NewMenu(nil))
-		d.win.OnBlur(func() {
-			if !d.busy {
-				d.win.Hide()
-			}
-		})
-		d.win.OnClose(func(e *mygo.CloseEvent) {
-			if !d.quitting {
-				e.PreventDefault()
-				d.win.Hide()
-			}
-		})
-		menu := mygo.NewMenu([]*mygo.MenuItem{
-			{Label: "打开 Clipnest", Click: func(*mygo.MenuItem, *mygo.Window) { d.show() }},
-			{Label: "暂停 / 恢复记录", Click: func(*mygo.MenuItem, *mygo.Window) {
-				_, p := h.Snapshot()
-				h.Pause(!p)
-				d.lastRevision = d.n.Revision()
-				_ = panelChanged.Broadcast(d.snapshot())
-			}},
-			updater.MenuItem(),
-			{Label: "问题反馈…", Click: func(*mygo.MenuItem, *mygo.Window) {
-				_ = mygo.Shell.OpenExternal("https://github.com/echoVic/clipnest/issues/new")
-			}},
-			mygo.Separator(), {Label: "退出 Clipnest", Click: func(*mygo.MenuItem, *mygo.Window) { mygo.App.Quit() }},
-		})
-		d.tray, err = mygo.NewTray(mygo.TrayOptions{Icon: trayIcon(), IconIsTemplate: runtime.GOOS == "darwin", ToolTip: "Clipnest · ⌘⇧V 打开剪贴板历史"})
-		if err != nil {
-			d.notice = "菜单栏图标不可用，仍可使用全局快捷键"
-		} else if runtime.GOOS == "linux" {
-			d.tray.SetMenu(menu)
-		} else {
-			d.tray.OnClick(d.show)
-			d.tray.OnRightClick(func() { d.win.Hide(); d.tray.SetMenu(menu); defer d.tray.SetMenu(nil); d.tray.PopUpMenu() })
-		}
-		if err := mygo.GlobalShortcut.Register("CmdOrCtrl+Shift+V", d.show); err != nil {
-			d.shortcut = "⌥ ⇧ V"
-			if err := mygo.GlobalShortcut.Register("Alt+Shift+V", d.show); err != nil {
-				d.shortcut = "菜单栏打开"
-				d.notice = "快捷键已被占用，请从菜单栏打开"
-			} else {
-				d.notice = "⌘⇧V 已被占用，已改用 ⌥⇧V"
-			}
-		}
-		if runtime.GOOS != "darwin" {
-			d.shortcut = "Ctrl Shift V"
-		}
-		mygo.App.OnActivate(func(bool) {
-			if !d.win.IsVisible() {
-				d.show()
-			}
-		})
-		d.win.OnReadyToShow(func() { d.show() })
-		go d.monitor()
-	})
-	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) { d.quitting = true; close(d.stop) })
+	mygo.App.OnWindowAllClosed(func() {})
+	mygo.App.OnSecondInstance(func([]string, string) { d.openPanel() })
+	mygo.App.OnActivate(func(bool) { d.openPanel() })
+	mygo.App.WhenReady(d.ready)
+	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) { d.quitting = true; d.closeView(); close(d.stop) })
 	mygo.App.OnWillQuit(func(*mygo.QuitEvent) {
 		_ = h.Save()
 		mygo.GlobalShortcut.UnregisterAll()
