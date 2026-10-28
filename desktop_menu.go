@@ -32,12 +32,16 @@ func trayIcon() []byte {
 func (d *Desktop) createTray() {
 	menu := mygo.NewMenu([]*mygo.MenuItem{
 		{Label: "打开 Clipnest", Click: func(*mygo.MenuItem, *mygo.Window) { d.openPanel() }},
+		{Label: "偏好设置…", Accelerator: "CmdOrCtrl+,", Click: func(*mygo.MenuItem, *mygo.Window) { d.OpenPreferences() }},
 		{Label: "暂停 / 恢复记录", Click: func(*mygo.MenuItem, *mygo.Window) {
 			if d.busy {
 				return
 			}
 			d.h.Pause(!d.h.IsPaused())
 			d.lastRevision = d.n.Revision()
+			if d.preferences != nil {
+				d.preferences.refresh()
+			}
 			_ = panelChanged.Broadcast(d.snapshot())
 		}},
 		updater.MenuItem(),

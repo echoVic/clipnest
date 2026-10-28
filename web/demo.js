@@ -19,7 +19,7 @@ const phraseSamples = [
 ];
 // Same excerpt and limits as phrases.go, so the demo shows what the app would.
 const excerpt = text => { const flat = [...text.trim().split(/\s+/).join(' ')]; return flat.length > 140 ? flat.slice(0, 140).join('') + '…' : flat.join(''); };
-export function createDemo({ legacyStorage = false, large = false } = {}) {
+export function createDemo({ version = '开发版', accessible = true, legacyStorage = false, large = false, clipboardAccess = 'allowed' } = {}) {
   let entries = Array.from({ length: large ? 10000 : samples.length }, (_, i) => {
     const [kind, title, text, source] = samples[i % samples.length];
     return { id: `sample-${i}`, kind, title: large ? `${i + 1} · ${title}` : title, text, source, excerpt: excerpt(text), created: now - i * 125000 };
@@ -35,7 +35,7 @@ export function createDemo({ legacyStorage = false, large = false } = {}) {
   };
   const summary = e => ({ ...e, text: undefined, image: undefined });
   const status = () => ({ ...storage, retention: { ...storage.retention } });
-  const state = () => ({ session, loading, total: entries.length, entries: loading ? [] : entries.slice(0, 50).map(summary), paused, accessible: true, target: '备忘录', platform: 'demo', notice: '', shortcut: '⌘ ⇧ V', storage: status() });
+  const state = () => ({ session, loading, total: entries.length, entries: loading ? [] : entries.slice(0, 50).map(summary), paused, clipboardAccess, accessible, version, target: '备忘录', platform: 'demo', notice: '', shortcut: '⌘ ⇧ V', storage: status() });
   const emit = () => { for (const fn of listeners) fn(state()); };
   const fresh = (publishLoading = false) => {
     session++; revision = 0; loading = true; clearTimeout(readyTimer);
@@ -89,8 +89,15 @@ export function createDemo({ legacyStorage = false, large = false } = {}) {
       case 'Pause': paused = args[0]; return state();
       case 'Delete': checkSession(args[0]); historyEntry(args[1]); entries = entries.filter(e => e.id !== args[1]); return fresh();
       case 'Clear': entries = []; return fresh();
-      case 'Permission': return true;
+      case 'Permission': return accessible;
       case 'OpenPermission': return null;
+      case 'ClipboardPermission': return clipboardAccess;
+      case 'OpenClipboardPermission': return null;
+      case 'RequestClipboardPermission':
+        if (paused) throw Error('请先恢复记录');
+        if (clipboardAccess === 'denied') throw Error('系统已拒绝读取');
+        if (clipboardAccess === 'default') clipboardAccess = 'ask';
+        return state();
       case 'Dismiss': return null;
       case 'Phrases': return phrases.filter(p => p.text.toLowerCase().includes(args[0].toLowerCase().trim())).map(p => ({ id: p.id, excerpt: excerpt(p.text) }));
       case 'PhraseDetail': return { ...phrase(args[0]) };

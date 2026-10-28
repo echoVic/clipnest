@@ -4,6 +4,9 @@ import { call, event } from "mygo-runtime";
 
 // ---- Types ----
 
+/** ClipboardAccess describes the system's policy, not a persisted app setting. */
+export type ClipboardAccess = "unsupported" | "default" | "ask" | "allowed" | "denied" | "unknown";
+
 /**
  * Entry owns immutable content. Panel sessions retain their own snapshot so
  * new copies cannot shift the numbers underneath a user's fingers.
@@ -34,11 +37,13 @@ export interface PanelState {
   loading: boolean;
   paused: boolean;
   accessible: boolean;
+  clipboardAccess: ClipboardAccess;
   target: string;
   platform: string;
   notice: string;
   shortcut: string;
   storage: StorageStatus;
+  version: string;
 }
 
 export interface PasteResult {
@@ -69,6 +74,9 @@ export interface StorageStatus {
   retention: RetentionPolicy;
 }
 
+/** ThemeSource selects the appearance of the app. */
+export type ThemeSource = "system" | "light" | "dark";
+
 // ---- Services ----
 
 /** Desktop's fields are main-thread-only; persistence has its own locks. */
@@ -85,6 +93,13 @@ export const Desktop = {
   },
   clear(): Promise<PanelState> {
     return call("Desktop.Clear");
+  },
+  /** ClipboardPermission checks policy without reading clipboard contents. */
+  clipboardPermission(): Promise<ClipboardAccess> {
+    return call("Desktop.ClipboardPermission");
+  },
+  confirmClipboardPermission(): Promise<PanelState> {
+    return call("Desktop.ConfirmClipboardPermission");
   },
   delete(session: number, id: string): Promise<PanelState> {
     return call("Desktop.Delete", session, id);
@@ -115,8 +130,14 @@ export const Desktop = {
   movePhrase(id: string, delta: number): Promise<void> {
     return call("Desktop.MovePhrase", id, delta);
   },
+  openClipboardPermission(): Promise<void> {
+    return call("Desktop.OpenClipboardPermission");
+  },
   openPermission(): Promise<void> {
     return call("Desktop.OpenPermission");
+  },
+  openPreferences(): Promise<void> {
+    return call("Desktop.OpenPreferences");
   },
   page(session: number, revision: number, q: string, kind: string, offset: number, limit: number): Promise<HistoryPage> {
     return call("Desktop.Page", session, revision, q, kind, offset, limit);
@@ -133,6 +154,23 @@ export const Desktop = {
   phrases(q: string): Promise<Phrase[]> {
     return call("Desktop.Phrases", q);
   },
+  promptPastePermission(session: number): Promise<string> {
+    return call("Desktop.PromptPastePermission", session);
+  },
+  /**
+   * A user-initiated recording action lets the OS ask for programmatic access.
+   * Permission belongs to macOS; a successful one-time read is not an Allow grant.
+   */
+  requestClipboardPermission(): Promise<PanelState> {
+    return call("Desktop.RequestClipboardPermission");
+  },
+  /**
+   * The existing webview preference is restored once. A native choice made
+   * before the webview finishes loading must take precedence over that restore.
+   */
+  restoreAppearance(source: ThemeSource): Promise<ThemeSource> {
+    return call("Desktop.RestoreAppearance", source);
+  },
   savePhrase(id: string, text: string): Promise<Phrase> {
     return call("Desktop.SavePhrase", id, text);
   },
@@ -141,6 +179,9 @@ export const Desktop = {
   },
   search(session: number, revision: number): Promise<void> {
     return call("Desktop.Search", session, revision);
+  },
+  setAppearance(source: ThemeSource): Promise<void> {
+    return call("Desktop.SetAppearance", source);
   },
   state(): Promise<PanelState> {
     return call("Desktop.State");
@@ -155,4 +196,5 @@ export const Desktop = {
 /** Events sent by the Go side. Subscribe with `events.name.on(listener)`. */
 export const events = {
   clipnestPanel: event<PanelState>("clipnest:panel"),
+  clipnestAppearance: event<ThemeSource>("clipnest:appearance"),
 } as const;

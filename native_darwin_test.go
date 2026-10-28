@@ -4,6 +4,7 @@ package main
 
 import (
 	"reflect"
+	"runtime"
 	"testing"
 )
 
@@ -36,5 +37,23 @@ func TestNativePastePermissionStopsBeforePosting(t *testing.T) {
 	n := &nativeBridge{trusted: func() bool { return false }, post: func(uint32, uintptr) { t.Fatal("posted without permission") }}
 	if err := n.Paste(targetApp{PID: 7}); err == nil {
 		t.Fatal("permission error hidden")
+	}
+}
+
+// Exercise the real Objective-C bridge using policy metadata only. This never
+// reads/writes clipboard contents or changes the app's system permissions.
+func TestNativeClipboardAccessPolicy(t *testing.T) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	n, err := openNative()
+	if err != nil {
+		t.Fatal(err)
+	}
+	access := n.ClipboardAccess()
+	switch access {
+	case clipboardUnsupported, clipboardDefault, clipboardAsk, clipboardAllowed, clipboardDenied:
+		t.Log("native clipboard access:", access)
+	default:
+		t.Fatalf("unexpected native clipboard policy: %q", access)
 	}
 }

@@ -13,17 +13,19 @@ import (
 var panelChanged = mygo.NewEvent[PanelState]("clipnest:panel")
 
 type PanelState struct {
-	Session    uint64        `json:"session"`
-	Entries    []Entry       `json:"entries"`
-	Total      int           `json:"total"`
-	Loading    bool          `json:"loading"`
-	Paused     bool          `json:"paused"`
-	Accessible bool          `json:"accessible"`
-	Target     string        `json:"target"`
-	Platform   string        `json:"platform"`
-	Notice     string        `json:"notice"`
-	Shortcut   string        `json:"shortcut"`
-	Storage    StorageStatus `json:"storage"`
+	Session         uint64          `json:"session"`
+	Entries         []Entry         `json:"entries"`
+	Total           int             `json:"total"`
+	Loading         bool            `json:"loading"`
+	Paused          bool            `json:"paused"`
+	Accessible      bool            `json:"accessible"`
+	ClipboardAccess ClipboardAccess `json:"clipboardAccess"`
+	Target          string          `json:"target"`
+	Platform        string          `json:"platform"`
+	Notice          string          `json:"notice"`
+	Shortcut        string          `json:"shortcut"`
+	Storage         StorageStatus   `json:"storage"`
+	Version         string          `json:"version"`
 }
 type PasteResult struct {
 	Copied  bool   `json:"copied"`
@@ -33,26 +35,30 @@ type PasteResult struct {
 
 // Desktop's fields are main-thread-only; persistence has its own locks.
 type Desktop struct {
-	h            *History
-	p            *Phrases
-	storage      *Storage
-	n            *nativeBridge
-	win          *mygo.Window
-	tray         *mygo.Tray
-	entries      []Entry
-	total        int
-	loading      bool
-	view         *historyView
-	cancelView   context.CancelFunc
-	session      uint64
-	target       targetApp
-	lastRevision int64
-	lastID       string
-	notice       string
-	shortcut     string
-	busy         bool
-	quitting     bool
-	stop         chan struct{}
+	h                     *History
+	p                     *Phrases
+	storage               *Storage
+	n                     *nativeBridge
+	win                   *mygo.Window
+	tray                  *mygo.Tray
+	entries               []Entry
+	total                 int
+	loading               bool
+	view                  *historyView
+	cancelView            context.CancelFunc
+	session               uint64
+	target                targetApp
+	lastRevision          int64
+	lastID                string
+	clipboardAccess       ClipboardAccess
+	preferences           *preferencesWindow
+	permission            *permissionWindow
+	appearanceInitialized bool
+	notice                string
+	shortcut              string
+	busy                  bool
+	quitting              bool
+	stop                  chan struct{}
 }
 
 func (d *Desktop) snapshot() PanelState {
@@ -63,8 +69,9 @@ func (d *Desktop) snapshot() PanelState {
 	}
 	return PanelState{
 		Session: d.session, Entries: summaries, Total: d.total, Loading: d.loading, Paused: paused, Accessible: d.n.Accessible(),
-		Target: d.target.Name, Platform: runtime.GOOS, Notice: d.notice, Shortcut: d.shortcut,
-		Storage: d.StorageStatus(),
+		ClipboardAccess: d.clipboardAccess,
+		Target:          d.target.Name, Platform: runtime.GOOS, Notice: d.notice, Shortcut: d.shortcut,
+		Storage: d.StorageStatus(), Version: applicationVersion(),
 	}
 }
 func (d *Desktop) State() (s PanelState) { mygo.RunOnMain(func() { s = d.snapshot() }); return }

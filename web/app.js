@@ -3,6 +3,7 @@ import { keyAction } from './keys.js';
 import { createDemo } from './demo.js';
 import { DetailCache, PagedList, PAGE_SIZE, virtualRange, scrollForIndex, acceptPanel, panelReadError, updateSelection, characterCount } from './responsiveness.js';
 import { looksLikeMarkdown, renderMarkdown } from './markdown.js';
+import { preferencesTabs } from './preferences.js';
 
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -14,7 +15,11 @@ const icon = name => {
 const node = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
 const demo = !window.mygo;
 const params = new URLSearchParams(location.search);
-const api = demo ? createDemo({ legacyStorage: params.has('migration'), large: params.has('large') }) : { call: (method, ...args) => window.mygo.call(`Desktop.${method}`, ...args), on: (event, fn) => window.mygo.on(event, fn) };
+let demoVersion = '开发版';
+if (demo) {
+  try { const info = await fetch('./app-info.json').then(response => response.ok ? response.json() : {}); demoVersion = info.version || demoVersion; } catch {}
+}
+const api = demo ? createDemo({ version: demoVersion, accessible: !params.has('paste-permission'), legacyStorage: params.has('migration'), large: params.has('large'), clipboardAccess: params.get('clipboard') || 'allowed' }) : { call: (method, ...args) => window.mygo.call(`Desktop.${method}`, ...args), on: (event, fn) => window.mygo.on(event, fn) };
 document.body.classList.add(demo ? 'demo' : 'desktop');
 let state = { session: 0, total: 0, loading: true, paused: false, accessible: false, platform: '', target: '', shortcut: '⌘ ⇧ V' };
 let kind = 'all', view = 'history', draft = null, reordering = false, busy = false, choosing = false, queryVersion = 0, detailVersion = 0, queryTimer, toastTimer, queryPending = false, queryScheduled = false, renderFrame;
@@ -41,17 +46,45 @@ function relativeTime(time) {
   return new Date(time).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
 }
 function header() {
-  $('#status').classList.toggle('paused', state.paused);
-  $('#status').replaceChildren(node('i'), document.createTextNode(state.paused ? '已暂停' : '正在记录'));
+  const access = state.clipboardAccess;
+  const recording = access === 'allowed' || access === 'unsupported';
+  const statuses = { default: '等待授权', ask: '等待授权', allowed: '正在记录', unsupported: '正在记录', denied: '记录未授权' };
+  const status = state.paused ? '已暂停' : statuses[access] || '记录权限未知';
+  $('#status').classList.toggle('paused', state.paused || !recording);
+  $('#status').replaceChildren(node('i'), document.createTextNode(status));
   $('#pause').replaceChildren(icon(state.paused ? 'play' : 'pause'));
   $('#pause').title = state.paused ? '恢复记录' : '暂停记录'; $('#pause').setAttribute('aria-label', $('#pause').title);
+  $('#record-pause').checked = !!state.paused;
+  $('#record-pause').disabled = busy;
   $('#destination').textContent = state.target ? `粘贴到 ${state.target}` : '选中后可复制';
   $('#shortcut-label').textContent = state.shortcut;
+  $('#app-version').textContent = `Clipnest ${state.version || '开发版'}`;
   $('#notice').hidden = !state.notice; $('#notice').textContent = state.notice;
   $('#count').textContent = state.total;
   $('#permission-status').textContent = demo ? '演示模式，桌面版可粘贴到原应用。' : state.platform !== 'darwin' ? '此系统使用「仅复制」，自动粘贴支持 macOS。' : state.accessible ? '已允许，选完即可粘贴到原应用。' : '允许辅助功能，选完直接粘贴。';
   $('#permission').hidden = demo || state.platform !== 'darwin' || state.accessible;
+  clipboardPrompt();
   storagePrompt();
+}
+function clipboardPrompt() {
+  const access = state.clipboardAccess;
+  const descriptions = {
+    unsupported: '此系统不提供单独的剪贴板记录权限。',
+    default: '开始记录会尝试读取当前剪贴板，让系统询问授权。请先在其他应用复制普通文字。',
+    ask: '系统设为每次询问，后台不会读取。点「开始记录」可读取一次；自动记录需在系统设置中改为「允许」。',
+    allowed: '系统允许记录文字与图片，仅保存在这台电脑。',
+    denied: '系统已拒绝读取，新的复制不会记录。历史与常用语仍可使用。请在系统设置中改为「允许」。',
+  };
+  $('#clipboard-permission-row').hidden = !demo && state.platform !== 'darwin';
+  $('#clipboard-status').textContent = descriptions[access] || '无法确认记录权限，已停止读取新的复制。';
+  $('#clipboard-request').hidden = access !== 'default' && access !== 'ask';
+  $('#clipboard-request').disabled = busy || !!state.paused;
+  $('#clipboard-settings').hidden = access === 'unsupported' || access === 'default';
+  const names = { default: '等待授权', ask: '每次询问', denied: '已拒绝', allowed: '已允许', unsupported: '无需单独授权' };
+  $('#clipboard-dialog-status').textContent = names[access] || '无法确认';
+  $('#clipboard-dialog-description').textContent = descriptions[access] || '无法确认记录权限，已停止读取新的复制。';
+  $('#clipboard-confirm').hidden = access !== 'default' && access !== 'ask';
+  $('#clipboard-dialog-settings').hidden = access === 'unsupported' || access === 'default';
 }
 function storagePrompt() {
   const storage = state.storage;
@@ -340,11 +373,18 @@ async function choose(copyOnly, pick) {
   try {
     const ticket = await pages.pick();
     if (!pages.isCurrent(ticket) || blocked()) return;
-    if (!copyOnly && !demo && state.platform === 'darwin' && !state.accessible) {
+    if (!copyOnly && (demo || state.platform === 'darwin') && !state.accessible) {
       const accessible = await call('Permission');
       if (!pages.isCurrent(ticket) || blocked()) return;
       state.accessible = accessible; header();
-      if (!accessible) { $('#permission-dialog').showModal(); return; }
+      if (!accessible) {
+        if (demo) { $('#permission-dialog').showModal(); return; }
+        const decision = await call('PromptPastePermission', ticket.session);
+        if (!pages.isCurrent(ticket) || blocked()) return;
+        if (decision === 'settings') { await call('OpenPermission'); return; }
+        if (decision !== 'copy') return;
+        copyOnly = true;
+      }
     }
     if (!pages.isCurrent(ticket) || blocked()) return;
     busy = dispatching = true; actionButtons();
@@ -419,8 +459,49 @@ $('#clear-search').onclick = () => { $('#search').value = ''; $('#clear-search')
 $$('.filters button').forEach(b => b.onclick = () => { if (busy) return; kind = b.dataset.kind; $$('.filters button').forEach(x => { x.classList.toggle('active', x === b); x.setAttribute('aria-pressed', x === b); }); refresh(); });
 $$('.views button').forEach(b => b.onclick = () => switchView(b.dataset.view));
 $('#paste').onclick = () => choose(false); $('#copy-only').onclick = () => choose(true); $('#dismiss').onclick = dismiss;
-$('#pause').onclick = async () => { try { const next = await call('Pause', !state.paused); state.paused = next.paused; header(); toast(state.paused ? '已暂停，新的复制不会保存' : '已恢复记录'); } catch (e) { toast(message(e)); } };
-$('#settings').onclick = async () => { $('#preferences').showModal(); try { state.accessible = await call('Permission'); header(); } catch (e) { toast(message(e)); } };
+const pauseRecording = async () => {
+  if (busy) return;
+  busy = true; header(); actionButtons();
+  try { const next = await call('Pause', !state.paused); state.paused = next.paused; state.clipboardAccess = next.clipboardAccess; toast(state.paused ? '已暂停，新的复制不会保存' : '已恢复记录'); }
+  catch (e) { toast(message(e)); }
+  finally { busy = false; header(); actionButtons(); }
+};
+$('#pause').onclick = $('#record-pause').onchange = pauseRecording;
+preferencesTabs($('#preferences'));
+$('#settings').onclick = async () => {
+  if (busy) return;
+  if (!demo) {
+    try { await call('OpenPreferences'); } catch (e) { toast(message(e)); }
+    return;
+  }
+  $('#preferences').showModal();
+  try { state.accessible = await call('Permission'); state.clipboardAccess = await call('ClipboardPermission'); header(); }
+  catch (e) { toast(message(e)); }
+};
+$('#clipboard-settings').onclick = async () => {
+  if (demo) { $('#clipboard-dialog').showModal(); return; }
+  try { await call('OpenClipboardPermission'); } catch (e) { toast(message(e)); }
+};
+async function requestClipboard() {
+  if (busy || state.paused) return;
+  busy = true; clipboardPrompt(); actionButtons();
+  try {
+    applyState(await call(demo ? 'RequestClipboardPermission' : 'ConfirmClipboardPermission'));
+    toast(demo ? '演示：未读取系统剪贴板' : state.clipboardAccess === 'allowed' ? '已允许自动记录' : '已读取当前内容；自动记录需在系统设置中改为「允许」');
+  } catch (e) {
+    try { state.clipboardAccess = await call('ClipboardPermission'); } catch { state.clipboardAccess = 'unknown'; }
+    toast(message(e));
+  } finally { busy = false; header(); render(); }
+}
+$('#clipboard-request').onclick = () => {
+  if (busy || state.paused) return;
+  if (demo) { $('#clipboard-dialog').showModal(); return; }
+  return requestClipboard();
+};
+$('#clipboard-confirm').onclick = () => { $('#clipboard-dialog').close(); return requestClipboard(); };
+$('#clipboard-dialog-settings').onclick = async () => {
+  try { await call('OpenClipboardPermission'); if (demo) toast('演示：桌面版会打开系统设置'); } catch (e) { toast(message(e)); }
+};
 $('#migrate-storage').onclick = $('#migrate-settings').onclick = migrateStorage;
 $('#retention-save').onclick = saveRetention;
 for (const input of [$('#retention-size'), $('#retention-days')]) input.oninput = () => { retentionDirty = true; $('#retention-error').hidden = true; };
@@ -445,8 +526,9 @@ $('#confirm-delete').onclick = async () => {
 };
 const openPermission = async () => { try { await call('OpenPermission'); } catch (e) { toast(message(e)); } };
 $('#permission').onclick = $('#permission-open').onclick = openPermission;
-// 更新窗口自己会说明结果；演示版没有桌面能力，不显示这个入口。
-$('#check-update-wrap').hidden = demo;
+// The demo keeps the desktop setting visible without checking for updates.
+$('#check-update').disabled = demo;
+$('#check-update').title = demo ? '浏览器演示；桌面版可检查更新' : '检查新版本';
 $('#check-update').onclick = () => { if (!demo) api.call('CheckForUpdates').catch(() => {}); };
 $('#permission-copy').onclick = () => { $('#permission-dialog').close(); choose(true); };
 $('#reopen').onclick = async () => {
@@ -491,8 +573,30 @@ document.addEventListener('keydown', event => {
 });
 const mq = matchMedia('(prefers-color-scheme:dark)');
 function applyTheme() { const theme = $('#theme').value; document.documentElement.dataset.theme = theme === 'system' ? (mq.matches ? 'dark' : 'light') : theme; }
-try { $('#theme').value = localStorage.getItem('clipnest-theme') || 'system'; } catch {}
-$('#theme').onchange = () => { try { localStorage.setItem('clipnest-theme', $('#theme').value); } catch {} applyTheme(); }; mq.addEventListener('change', applyTheme); applyTheme();
+let appearanceRevision = 0;
+function syncTheme(source) {
+  if (!['system', 'light', 'dark'].includes(source)) return;
+  appearanceRevision++;
+  $('#theme').value = source;
+  try { localStorage.setItem('clipnest-theme', source); } catch {}
+  applyTheme();
+}
+let savedTheme = 'system';
+try { savedTheme = localStorage.getItem('clipnest-theme') || 'system'; } catch {}
+syncTheme(['system', 'light', 'dark'].includes(savedTheme) ? savedTheme : 'system');
+$('#theme').onchange = async () => {
+  const source = $('#theme').value;
+  if (demo) { syncTheme(source); return; }
+  try { await call('SetAppearance', source); } catch (e) { toast(message(e)); }
+};
+mq.addEventListener('change', applyTheme);
+api.on('clipnest:appearance', syncTheme);
+if (!demo) {
+  const revision = appearanceRevision;
+  call('RestoreAppearance', $('#theme').value).then(source => {
+    if (revision === appearanceRevision) syncTheme(source);
+  }).catch(e => toast(message(e)));
+}
 api.on('clipnest:panel', data => applyState(data, !busy && data.session !== state.session));
 if (!demo) {
   const applyPreferences = preferences => {

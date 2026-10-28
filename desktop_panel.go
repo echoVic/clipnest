@@ -21,6 +21,7 @@ func (d *Desktop) ready() {
 	if err != nil {
 		log.Fatal("无法初始化系统剪贴板：", err)
 	}
+	d.clipboardAccess = d.n.ClipboardAccess()
 	d.win = mygo.NewWindow(mygo.WindowOptions{
 		Title: "Clipnest · 剪贴板历史", URL: "/",
 		Width: panelWidth, Height: panelHeight,
@@ -30,7 +31,7 @@ func (d *Desktop) ready() {
 	d.win.SetMenu(mygo.NewMenu(nil))
 	d.win.OnHide(d.hidden)
 	d.win.OnBlur(func() {
-		if !d.busy {
+		if !d.busy && !d.permissionActive() {
 			d.hide()
 		}
 	})
@@ -62,6 +63,7 @@ func (d *Desktop) closeView() {
 // Both app-initiated and framework-initiated hiding end the session. Native
 // callbacks can reenter Hide; invalidation must happen once.
 func (d *Desktop) hidden() {
+	d.cancelPermission()
 	if d.cancelView == nil && d.view == nil && !d.loading {
 		return
 	}
@@ -131,6 +133,10 @@ func panelBounds(area mygo.Rectangle) mygo.Rectangle {
 // the shortcut and tray button toggle it, preserving the selected target.
 func (d *Desktop) openPanel() {
 	if d.busy || d.quitting || d.win == nil || d.win.IsDestroyed() {
+		return
+	}
+	if d.permissionActive() {
+		d.permission.win.Focus()
 		return
 	}
 	if d.win.IsVisible() {

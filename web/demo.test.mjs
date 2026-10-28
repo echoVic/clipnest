@@ -137,3 +137,21 @@ test('mutation loading states are returned, while migration also publishes loadi
  assert.deepEqual(events.map(state => state.loading), [true, false]);
  assert.equal(events[0].session, events[1].session);
 });
+
+test('clipboard permission demo keeps one-time consent separate from automatic recording', async () => {
+ const demo = createDemo({ clipboardAccess: 'default' });
+ assert.equal(await demo.call('ClipboardPermission'), 'default');
+ const ready = readyState(demo); await demo.call('State');
+ const before = await ready;
+ const after = await demo.call('RequestClipboardPermission');
+ assert.equal(after.clipboardAccess, 'ask');
+ assert.equal(after.session, before.session);
+ assert.deepEqual(after.entries, before.entries);
+ assert.equal((await demo.call('RequestClipboardPermission')).clipboardAccess, 'ask');
+ assert.equal((await demo.call('Pause', true)).clipboardAccess, 'ask');
+ await assert.rejects(demo.call('RequestClipboardPermission'), /恢复记录/);
+ const denied = createDemo({ clipboardAccess: 'denied' });
+ await assert.rejects(denied.call('RequestClipboardPermission'), /拒绝/);
+ assert.equal(await denied.call('ClipboardPermission'), 'denied');
+ assert.equal(await denied.call('OpenClipboardPermission'), null);
+});

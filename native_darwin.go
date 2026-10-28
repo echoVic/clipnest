@@ -104,6 +104,27 @@ func (n *nativeBridge) Revision() int64 {
 	defer n.pool()()
 	return int64(n.send(n.send(n.getClass("NSPasteboard"), "generalPasteboard"), "changeCount"))
 }
+func (n *nativeBridge) ClipboardAccess() ClipboardAccess {
+	defer n.pool()()
+	board := n.send(n.getClass("NSPasteboard"), "generalPasteboard")
+	// macOS 13–15.3 have no accessBehavior property.
+	if n.send(board, "respondsToSelector:", n.selector("accessBehavior")) == 0 {
+		return clipboardUnsupported
+	}
+	// NSPasteboardAccessBehavior raw values from NSPasteboard.h (macOS 15.4+).
+	switch n.send(board, "accessBehavior") {
+	case 0:
+		return clipboardDefault
+	case 1:
+		return clipboardAsk
+	case 2:
+		return clipboardAllowed
+	case 3:
+		return clipboardDenied
+	default:
+		return clipboardUnknown
+	}
+}
 func (n *nativeBridge) Accessible() bool { return n.trusted() }
 func (n *nativeBridge) ReadyToPaste(t targetApp) bool {
 	return pasteInputReady(t.PID, n.Target().PID, n.flags(1), func(key uint16) bool { return n.keyDown(1, key) })

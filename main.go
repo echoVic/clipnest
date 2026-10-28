@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"encoding/json"
 	"flag"
 	"github.com/egoist/mygo"
 	_ "github.com/egoist/mygo/locales/zh-Hans"
@@ -31,6 +32,11 @@ func main() {
 		s := http.Server{Addr: *webAddress, ReadHeaderTimeout: 5 * time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("X-Content-Type-Options", "nosniff")
 			w.Header().Set("Cache-Control", "no-store")
+			if r.URL.Path == "/app-info.json" {
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]string{"version": applicationVersion()})
+				return
+			}
 			http.FileServer(http.FS(web)).ServeHTTP(w, r)
 		})}
 		log.Print("Clipnest 交互演示已启动（示例数据，不读取系统剪贴板）")
@@ -79,9 +85,13 @@ func main() {
 	mygo.Bind(d)
 	mygo.App.OnWindowAllClosed(func() {})
 	mygo.App.OnSecondInstance(func([]string, string) { d.openPanel() })
-	mygo.App.OnActivate(func(bool) { d.openPanel() })
+	mygo.App.OnActivate(func(bool) {
+		if !d.permissionActive() && (d.preferences == nil || !d.preferences.win.IsVisible()) {
+			d.openPanel()
+		}
+	})
 	mygo.App.WhenReady(d.ready)
-	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) { d.quitting = true; d.closeView(); close(d.stop) })
+	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) { d.quitting = true; d.cancelPermission(); d.closeView(); close(d.stop) })
 	mygo.App.OnWillQuit(func(*mygo.QuitEvent) {
 		_ = h.Save()
 		mygo.GlobalShortcut.UnregisterAll()

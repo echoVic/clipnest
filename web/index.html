@@ -25,6 +25,7 @@
 <symbol id="i-shield" viewBox="0 0 24 24"><path d="m12 3 8 3v5c0 5-8 10-8 10s-8-5-8-10V6Z"/><path d="m8 11 3 3 5-5"/></symbol>
 <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
 <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16Z"/><path d="m13.5 6.5 4 4"/></symbol>
+<symbol id="i-storage" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0"/></symbol>
 </defs></svg>
 <div class="demo-top" aria-hidden="true"><span class="demo-wordmark">clipnest<span>®</span></span><span>给复制的内容，一个落脚处。</span></div>
 <main id="panel" class="panel" aria-label="剪贴板历史">
@@ -54,26 +55,67 @@
 </main>
 <div class="demo-bottom"><span><i></i>交互演示 · 示例数据</span><button id="reopen">重新唤起 <kbd>⌘ ⇧ V</kbd></button></div>
 <dialog id="preferences" aria-labelledby="preferences-title">
-  <div class="dialog-top"><div><span class="eyebrow">按你的习惯</span><h2 id="preferences-title">偏好设置</h2></div><button class="icon-button close-dialog" aria-label="关闭偏好设置"><svg><use href="#i-close"/></svg></button></div>
-  <div class="setting-row"><div><strong>唤起快捷键</strong><p>保留系统的 ⌘V，历史面板随叫随到。</p></div><kbd id="shortcut-label">⌘ ⇧ V</kbd></div>
-  <div class="setting-row"><div><strong>外观</strong><p>也可以随系统自动切换。</p></div><select id="theme" aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></div>
-  <div class="setting-row"><div><strong>自动粘贴</strong><p id="permission-status">正在检查辅助功能权限…</p></div><button id="permission" class="secondary">前往设置</button></div>
-  <div class="setting-row"><div><strong>本地存储</strong><p id="storage-description"></p><p id="storage-error" class="field-error" role="alert" hidden></p></div><button id="migrate-settings" type="button" class="secondary" hidden>一键迁移</button></div>
-  <fieldset id="retention-fields" class="retention-fields" disabled aria-describedby="retention-note retention-legacy">
-    <legend>历史保留策略</legend>
-    <label for="retention-size">历史内容容量(MiB)<input id="retention-size" type="number" min="0" step="1" value="512" required></label>
-    <label for="retention-days">保留天数<input id="retention-days" type="number" min="0" step="1" value="0" required></label>
-  </fieldset>
-  <p id="retention-note" class="small-note">0 表示不限；容量仅计算历史内容，不含数据库开销。保存后立即从最旧的历史开始清理，常用语不受影响。</p>
-  <p id="retention-legacy" class="small-note">请先手动迁移到 SQLite；JSON 存储不启用保留策略。</p>
-  <p id="retention-error" class="field-error" role="alert" hidden></p>
-  <button id="retention-save" type="button" class="secondary" disabled>保存并清理</button>
-  <div class="privacy-note"><svg><use href="#i-shield"/></svg><p>历史仅保存在这台电脑，重启后保留。<br>忽略标记为机密的内容。</p></div>
-  <button id="clear-history" class="danger">清空所有历史</button><p class="small-note">不会删除常用语。</p><p class="small-note">普通文字按纯文本粘贴，支持 PNG 图片。可随时暂停记录。</p>
-  <p class="small-note">遇到问题或有建议？<a href="https://github.com/echoVic/clipnest/issues/new" target="_blank" rel="noopener noreferrer">在 GitHub 反馈</a><span id="check-update-wrap"> · <button id="check-update" class="link-button" type="button">检查更新</button></span></p>
+  <header class="preferences-header"><h2 id="preferences-title">通用</h2><button class="icon-button close-dialog" aria-label="关闭偏好设置"><svg><use href="#i-close"/></svg></button></header>
+  <nav class="preferences-tabs" role="tablist" aria-label="偏好设置分组">
+    <button id="preferences-general-tab" type="button" role="tab" aria-selected="true" aria-controls="preferences-general" tabindex="0"><svg><use href="#i-sliders"/></svg><span>通用</span></button>
+    <button id="preferences-privacy-tab" type="button" role="tab" aria-selected="false" aria-controls="preferences-privacy" tabindex="-1"><svg><use href="#i-shield"/></svg><span>隐私</span></button>
+    <button id="preferences-storage-tab" type="button" role="tab" aria-selected="false" aria-controls="preferences-storage" tabindex="-1"><svg><use href="#i-storage"/></svg><span>存储</span></button>
+  </nav>
+  <div class="preferences-content">
+    <section id="preferences-general" role="tabpanel" aria-labelledby="preferences-general-tab">
+      <section class="settings-group" aria-labelledby="general-group-title"><h3 id="general-group-title">界面与操作</h3>
+        <div class="setting-row"><label for="theme">外观</label><select id="theme"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></div>
+        <div class="setting-row"><div><strong>唤起面板</strong><p>方向键或数字选择，Enter 粘贴。</p></div><kbd id="shortcut-label">⌘ ⇧ V</kbd></div>
+      </section>
+      <section class="settings-group" aria-labelledby="about-group-title"><h3 id="about-group-title">版本与反馈</h3>
+        <div class="setting-row"><div><strong id="app-version">Clipnest</strong><p>每 4 小时自动检查更新。</p></div><span id="check-update-wrap"><button id="check-update" class="secondary" type="button">检查更新…</button></span></div>
+        <div class="setting-row"><p>遇到问题，或想提出建议？</p><a href="https://github.com/echoVic/clipnest/issues/new" target="_blank" rel="noopener noreferrer">发送反馈…</a></div>
+      </section>
+    </section>
+    <section id="preferences-privacy" role="tabpanel" aria-labelledby="preferences-privacy-tab" hidden>
+      <section class="settings-group" aria-labelledby="privacy-group-title"><h3 id="privacy-group-title">记录权限</h3>
+        <div class="setting-row"><div><label for="record-pause">暂停记录</label><p>新的复制不保存，已有历史仍可使用。</p></div><input id="record-pause" class="setting-switch" type="checkbox" role="switch"></div>
+        <div class="setting-row" id="clipboard-permission-row"><div><strong>剪贴板记录</strong><p id="clipboard-status" role="status">正在检查记录权限…</p></div><div class="clipboard-permission-actions"><button id="clipboard-request" type="button" class="secondary" hidden>开始记录</button><button id="clipboard-settings" type="button" class="secondary" hidden>记录权限设置…</button></div></div>
+      </section>
+      <section class="settings-group" aria-labelledby="paste-group-title"><h3 id="paste-group-title">自动粘贴</h3>
+        <div class="setting-row"><div><strong>辅助功能</strong><p id="permission-status">正在检查辅助功能权限…</p></div><button id="permission" class="secondary">辅助功能设置…</button></div>
+      </section>
+      <p class="settings-note"><svg><use href="#i-shield"/></svg><span>文字与图片仅保存在这台电脑。标记为机密的内容不会记录。</span></p>
+    </section>
+    <section id="preferences-storage" role="tabpanel" aria-labelledby="preferences-storage-tab" hidden>
+      <section class="settings-group" aria-labelledby="storage-group-title"><h3 id="storage-group-title">本地存储</h3>
+        <div class="setting-row"><div><strong id="storage-description"></strong><p>历史与常用语在本机保存，重启后保留。</p><p id="storage-error" class="field-error" role="alert" hidden></p></div><button id="migrate-settings" type="button" class="secondary" hidden>一键迁移</button></div>
+      </section>
+      <section class="settings-group" aria-labelledby="retention-group-title"><h3 id="retention-group-title">历史保留策略</h3>
+        <fieldset id="retention-fields" class="retention-fields" disabled aria-label="历史保留策略" aria-describedby="retention-note retention-legacy">
+          <label for="retention-size">历史内容容量(MiB)<input id="retention-size" type="number" min="0" max="1048576" step="1" value="512" required></label>
+          <label for="retention-days">保留天数<input id="retention-days" type="number" min="0" max="36500" step="1" value="0" required></label>
+        </fieldset>
+        <div class="setting-row retention-action"><div><p id="retention-note">0 表示不限。保存后从最旧的历史开始清理，常用语始终保留。</p><p id="retention-legacy" hidden>请先迁移到 SQLite，再设置保留策略。</p><p id="retention-error" class="field-error" role="alert" hidden></p></div><button id="retention-save" type="button" class="secondary" disabled>保存并清理</button></div>
+      </section>
+      <section class="settings-group" aria-labelledby="clear-group-title"><h3 id="clear-group-title">清理历史</h3>
+        <div class="setting-row"><p>仅清空复制历史，不删除常用语。</p><button id="clear-history" type="button" class="danger">清空…</button></div>
+      </section>
+    </section>
+  </div>
 </dialog>
-<dialog id="confirm-clear" aria-labelledby="clear-title"><div class="dialog-top"><div><span class="eyebrow">清理历史</span><h2 id="clear-title">清空所有复制记录？</h2></div></div><p>此操作无法撤销，不影响当前系统剪贴板的内容。</p><div class="confirm-actions"><button class="secondary close-dialog">保留历史</button><button id="confirm-delete" class="danger">确认清空</button></div></dialog>
-<dialog id="permission-dialog" aria-labelledby="permission-title"><div class="dialog-top"><div><span class="eyebrow">最后一步</span><h2 id="permission-title">让粘贴回到原来的位置</h2></div><button class="icon-button close-dialog" aria-label="关闭授权说明"><svg><use href="#i-close"/></svg></button></div><p>在「系统设置 → 隐私与安全性 → 辅助功能」中允许 Clipnest，即可选完直接粘贴。未授权时仍可使用「仅复制」。</p><div class="confirm-actions"><button id="permission-copy" class="secondary">这次仅复制</button><button id="permission-open" class="primary">打开系统设置</button></div></dialog>
+<dialog id="confirm-clear" aria-labelledby="clear-title"><div class="dialog-top"><div><span class="eyebrow">清理历史</span><h2 id="clear-title">清空所有复制记录？</h2></div></div><p>此操作无法撤销。常用语和当前系统剪贴板不会被清空。</p><div class="confirm-actions"><button class="secondary close-dialog" autofocus>取消</button><button id="confirm-delete" class="danger">确认清空</button></div></dialog>
+<dialog id="permission-dialog" class="permission-dialog" aria-labelledby="permission-title">
+  <header class="preferences-header"><h2 id="permission-title">自动粘贴</h2><button class="icon-button close-dialog" aria-label="关闭授权说明"><svg><use href="#i-close"/></svg></button></header>
+  <div class="permission-content">
+    <div class="permission-intro"><span class="permission-icon"><svg><use href="#i-shield"/></svg></span><h3>允许粘贴回原来的应用</h3><p>辅助功能用于发送粘贴按键，与剪贴板记录权限独立。</p></div>
+    <section class="settings-group" aria-labelledby="paste-permission-group"><h3 id="paste-permission-group">权限说明</h3><strong>系统设置 → 隐私与安全性 → 辅助功能</strong><p>允许 Clipnest 后，重新选择内容即可自动粘贴。未授权时，可以「这次仅复制」，再手动按 ⌘V。</p></section>
+  </div>
+  <footer class="permission-actions"><button class="secondary close-dialog" autofocus>取消</button><button id="permission-copy" class="secondary">这次仅复制</button><button id="permission-open" class="primary">打开系统设置…</button></footer>
+</dialog>
+<dialog id="clipboard-dialog" class="permission-dialog" aria-labelledby="clipboard-dialog-title">
+  <header class="preferences-header"><h2 id="clipboard-dialog-title">剪贴板记录</h2><button class="icon-button close-dialog" aria-label="关闭记录授权说明"><svg><use href="#i-close"/></svg></button></header>
+  <div class="permission-content">
+    <div class="permission-intro"><span class="permission-icon"><svg><use href="#i-shield"/></svg></span><h3>允许 Clipnest 记录复制内容</h3><p>文字与图片仅保存在这台电脑，标记为机密的内容不会记录。</p></div>
+    <section class="settings-group" aria-labelledby="record-permission-group"><h3 id="record-permission-group">权限说明</h3><div class="setting-row"><strong>当前系统权限</strong><span id="clipboard-dialog-status"></span></div><p id="clipboard-dialog-description"></p><p>一次读取成功不代表持续授权。自动记录需将系统中的「从其他 App 粘贴」设为「允许」。</p></section>
+  </div>
+  <footer class="permission-actions"><button class="secondary close-dialog" autofocus>取消</button><button id="clipboard-dialog-settings" class="secondary" hidden>记录权限设置…</button><button id="clipboard-confirm" class="primary">开始记录</button></footer>
+</dialog>
 <dialog id="phrase-editor" class="phrase-editor" aria-labelledby="phrase-editor-title"><div class="dialog-top"><div><span class="eyebrow">常用语</span><h2 id="phrase-editor-title">新建常用语</h2></div></div><textarea id="phrase-text" aria-label="常用语内容" spellcheck="false" placeholder="输入或粘贴要反复使用的文字…"></textarea><p id="phrase-error" class="field-error" role="alert" hidden></p><div class="confirm-actions"><span class="editor-hint"><kbd>⌘ ↩</kbd> 保存</span><button id="phrase-cancel" class="secondary">取消</button><button id="phrase-save" class="primary">保存</button></div></dialog>
 <dialog id="confirm-discard" aria-labelledby="discard-title"><div class="dialog-top"><div><span class="eyebrow">未保存的修改</span><h2 id="discard-title">放弃修改？</h2></div></div><p>刚才输入的内容不会保存。</p><div class="confirm-actions"><button id="keep-editing" class="secondary">继续编辑</button><button id="discard-phrase" class="danger">放弃</button></div></dialog>
 <dialog id="confirm-phrase-delete" aria-labelledby="phrase-delete-title"><div class="dialog-top"><div><span class="eyebrow">删除常用语</span><h2 id="phrase-delete-title">删除这条常用语？</h2></div></div><p>删除后无法恢复，不影响剪贴板和复制历史。</p><div class="confirm-actions"><button class="secondary close-dialog">保留</button><button id="confirm-phrase-delete-button" class="danger">删除</button></div></dialog>
