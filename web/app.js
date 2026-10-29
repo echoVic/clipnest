@@ -4,6 +4,7 @@ import { createDemo } from './demo.js';
 import { DetailCache, PagedList, PAGE_SIZE, virtualRange, scrollForIndex, acceptPanel, panelReadError, updateSelection, characterCount } from './responsiveness.js';
 import { looksLikeMarkdown, renderMarkdown } from './markdown.js';
 import { preferencesTabs, preferencesExclusions } from './preferences.js';
+import { imageTextPreview, imageTextSetting } from './image-text.js';
 
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -65,6 +66,26 @@ function header() {
   $('#permission').hidden = demo || state.platform !== 'darwin' || state.accessible;
   clipboardPrompt();
   storagePrompt();
+  imageTextPrompt();
+}
+function imageTextPrompt() {
+  const setting = imageTextSetting(state, demo);
+  $('#image-text-toggle').checked = setting.checked;
+  $('#image-text-toggle').disabled = busy || !setting.available;
+  $('#image-text-toggle').hidden = !setting.available;
+  $('#image-text-status').textContent = setting.note;
+}
+async function setImageText() {
+  if (busy) return;
+  const on = $('#image-text-toggle').checked;
+  busy = true; imageTextPrompt(); actionButtons();
+  try {
+    applyState(await call('SetImageText', on));
+    toast(on ? '已开启，图片会在后台逐张识别' : '已关闭，识别的文字已删除');
+  } catch (err) {
+    try { state.storage = await call('StorageStatus'); } catch {}
+    toast(message(err));
+  } finally { busy = false; header(); render(); }
 }
 function clipboardPrompt() {
   const access = state.clipboardAccess;
@@ -314,9 +335,15 @@ async function updatePreview() {
     const session = state.session;
     const e = await details.get(`history:${session}:${entry.id}`, () => call('Detail', session, entry.id));
     if (version !== detailVersion || !e) return;
-    let content;
+    let content, imageText;
     if (e.kind === 'image') {
-      content = node('div', 'image-stage'); const img = new Image(); img.alt = e.title; img.src = `data:image/png;base64,${e.image}`; content.append(img);
+      const stage = node('div', 'image-stage'); const img = new Image(); img.alt = e.title; img.src = `data:image/png;base64,${e.image}`; stage.append(img);
+      imageText = imageTextPreview(document, e, () => copyImageText(session, e.id));
+      content = stage;
+      if (imageText) {
+        content = node('div', imageText.button ? 'image-preview has-image-text' : 'image-preview');
+        content.append(stage, imageText.section);
+      }
     } else if (e.kind === 'link') {
       content = node('div', 'preview-link'); const orb = node('div', 'link-orb'); orb.append(icon('link'));
       let host = '链接'; try { host = new URL(e.text.trim()).hostname; } catch {}
@@ -340,7 +367,19 @@ async function updatePreview() {
       finally { busy = false; render(); }
     };
     $('#preview-meta').replaceChildren(info, remove);
+    if (imageText?.button) {
+      const actions = node('span', 'meta-actions'); actions.append(imageText.button, remove);
+      $('#preview-meta').replaceChildren(info, actions);
+    }
   } catch (err) { if (version === detailVersion) toast(message(err)); }
+}
+// Copy-only: the text goes to the clipboard and never becomes a history entry.
+async function copyImageText(session, id) {
+  if (blocked() || choosing || session !== state.session || currentEntry()?.id !== id) return;
+  choosing = true; actionButtons();
+  try { toast((await call('CopyImageText', session, id)).message || '已复制图片文字'); }
+  catch (err) { toast(message(err)); }
+  finally { choosing = false; actionButtons(); }
 }
 async function phrasePreview(entry, version) {
   $('#type-label').textContent = '常用语';
@@ -505,6 +544,7 @@ $('#clipboard-dialog-settings').onclick = async () => {
   try { await call('OpenClipboardPermission'); if (demo) toast('演示：桌面版会打开系统设置'); } catch (e) { toast(message(e)); }
 };
 $('#migrate-storage').onclick = $('#migrate-settings').onclick = migrateStorage;
+$('#image-text-toggle').onchange = setImageText;
 $('#retention-save').onclick = saveRetention;
 for (const input of [$('#retention-size'), $('#retention-days')]) input.oninput = () => { retentionDirty = true; $('#retention-error').hidden = true; };
 $('#migration-later').onclick = () => { migrationDismissed = true; storagePrompt(); $('#list').focus({ preventScroll: true }); };

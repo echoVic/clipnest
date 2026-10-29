@@ -122,3 +122,14 @@ dialog{padding:25px;border-radius:17px;border:1px solid var(--line);background:v
 #excluded-app-picker-note{margin:0 0 18px;font-size:12px;line-height:1.7;color:var(--ink);opacity:.75}
 .excluded-app-sample-label{display:block;margin-bottom:8px;font-size:13px;font-weight:500}
 #excluded-app-sample{width:100%;min-width:0;padding:8px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--ink);font-size:12px}
+/* Image preview: the stage shrinks so recognized text shows below it; long
+   text scrolls with the preview while 复制文字 stays in the meta bar. */
+.image-preview{display:flex;flex-direction:column;gap:12px}
+.image-preview .image-stage{height:auto;flex-shrink:0;padding:8px}
+.image-preview.has-image-text .image-stage img{max-height:96px}
+.image-text{border-top:1px solid var(--line);padding-top:12px}
+.image-text .eyebrow{display:block;margin-bottom:6px}
+.preview-meta .image-text-copy{min-height:23px;padding:0 9px;font-size:10px}
+.meta-actions{align-items:center}
+.image-text-body{margin:0;font-size:12px;line-height:1.8;white-space:pre-wrap;user-select:text;-webkit-user-select:text;color:var(--ink)}
+.image-text-note{margin:0;font-size:11px;line-height:1.7;color:var(--muted)}

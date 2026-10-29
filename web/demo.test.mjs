@@ -39,8 +39,11 @@ test('storage upgrade demo is opt-in and preserves sample content', async () => 
  assert.equal((await call('StorageStatus')).migrationAvailable, true);
  const readyAfter = readyState(demo);
  const after = await call('MigrateStorage');
- assert.deepEqual(after, { backend: 'sqlite', migrationAvailable: false, cleanupPending: false, retention: { maxMiB: 512, keepDays: 0 } });
- assert.deepEqual((await readyAfter).entries, before.entries);
+ assert.deepEqual(after, { backend: 'sqlite', migrationAvailable: false, cleanupPending: false, retention: { maxMiB: 512, keepDays: 0 }, imageText: true });
+ // Only the sample screenshot changes: its recognized text becomes the title.
+ const migrated = (await readyAfter).entries;
+ assert.deepEqual(migrated.map(e => e.id), before.entries.map(e => e.id));
+ assert.deepEqual(migrated.filter(e => e.kind !== 'image'), before.entries.filter(e => e.kind !== 'image'));
  assert.deepEqual(await call('Phrases', ''), phrases);
  assert.deepEqual(await call('MigrateStorage'), after);
 });
@@ -215,4 +218,48 @@ test('demo exclusions persist through reopening, migration, retention and cleari
   assert.deepEqual(await demo.call('ExcludedApps'), apps, method);
  }
  assert.deepEqual(await createDemo().call('ExcludedApps'), []);
+});
+
+test('demo screenshot text is searchable, copyable without new history and follows the switch', async () => {
+ const demo = createDemo(), ready = readyState(demo);
+ await demo.call('State'); const state = await ready;
+ assert.equal(state.storage.imageText, true);
+ const image = state.entries.find(e => e.kind === 'image');
+ assert.ok(image, 'demo has a sample screenshot');
+ assert.equal(image.imageText, undefined, 'summaries omit recognized text');
+ assert.equal(image.title, '截图里的文字，也能搜到');
+ await demo.call('Search', state.session, 1);
+ const found = await demo.call('Page', state.session, 1, '后台逐张识别', 'all', 0, 50);
+ assert.deepEqual(found.entries.map(e => e.id), [image.id]);
+ const detail = await demo.call('Detail', state.session, image.id);
+ assert.equal(detail.imageTextState, 'ready');
+ assert.match(detail.imageText, /后台逐张识别/);
+ assert.match(detail.image, /^[A-Za-z0-9+/]+=*$/, 'the sample is a base64 PNG');
+ const copied = await demo.call('CopyImageText', state.session, image.id);
+ assert.equal(copied.copied, false); assert.match(copied.message, /演示/);
+ await assert.rejects(demo.call('CopyImageText', state.session, state.entries.find(e => e.kind === 'text').id), /没有可复制的文字/);
+ await assert.rejects(demo.call('CopyImageText', 0, image.id), /会话/);
+ const offReady = readyState(demo);
+ const off = await demo.call('SetImageText', false);
+ assert.equal(off.storage.imageText, false);
+ const reopened = await offReady;
+ assert.equal(reopened.total, state.total, 'switching never adds or removes history');
+ assert.equal(reopened.entries.find(e => e.id === image.id).title, '复制的图片');
+ await demo.call('Search', reopened.session, 1);
+ assert.equal((await demo.call('Page', reopened.session, 1, '后台逐张识别', 'all', 0, 50)).total, 0);
+ const hidden = await demo.call('Detail', reopened.session, image.id);
+ assert.equal(hidden.imageTextState, 'disabled'); assert.equal(hidden.imageText, undefined);
+ await assert.rejects(demo.call('CopyImageText', reopened.session, image.id), /没有可复制的文字/);
+ const onReady = readyState(demo);
+ await demo.call('SetImageText', true);
+ const restored = await onReady;
+ assert.equal((await demo.call('Detail', restored.session, image.id)).imageTextState, 'ready');
+});
+
+test('legacy demo storage explains that screenshot text needs SQLite', async () => {
+ const demo = createDemo({ legacyStorage: true }), ready = readyState(demo);
+ await demo.call('State'); const state = await ready;
+ const image = state.entries.find(e => e.kind === 'image');
+ assert.equal((await demo.call('Detail', state.session, image.id)).imageTextState, 'needsSQLite');
+ await assert.rejects(demo.call('SetImageText', true), /迁移/);
 });
