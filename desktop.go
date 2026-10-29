@@ -194,6 +194,10 @@ func (d *Desktop) SaveRetention(policy RetentionPolicy) (PanelState, error) {
 	return d.changeHistory(0, func() error { return d.h.SetRetention(policy) })
 }
 
+func (d *Desktop) SetImageText(enabled bool) (PanelState, error) {
+	return d.changeHistory(0, func() error { return d.h.SetImageText(enabled) })
+}
+
 func (d *Desktop) changeHistory(session uint64, change func() error) (s PanelState, err error) {
 	started := false
 	mygo.RunOnMain(func() {
@@ -329,4 +333,18 @@ func (d *Desktop) InsertPhrase(session uint64, id string, copyOnly bool) (PasteR
 		return PasteResult{}, err
 	}
 	return d.deliver(e, copyOnly, session)
+}
+
+// CopyImageText copies an image's recognized text the way InsertPhrase copies
+// a phrase, so the text does not become a history entry.
+func (d *Desktop) CopyImageText(session uint64, id string) (PasteResult, error) {
+	image, err := d.Detail(session, id)
+	if err != nil {
+		return PasteResult{}, err
+	}
+	e, err := imageTextCopy(image)
+	if err != nil {
+		return PasteResult{}, err
+	}
+	return d.deliver(e, true, session)
 }

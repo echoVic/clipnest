@@ -130,6 +130,8 @@ func TestSQLiteV2SearchIndexUpgrade(t *testing.T) {
 	}
 	// Preserve the actual v2 schema, not merely its version marker.
 	_, err = s.db.Exec(`DROP TRIGGER IF EXISTS history_search_delete; DROP TABLE IF EXISTS history_search;
+		DROP INDEX history_ocr_queue; DROP TABLE history_ocr; ALTER TABLE history DROP COLUMN ocr_state;
+		ALTER TABLE settings DROP COLUMN ocr_enabled;
 		DROP INDEX IF EXISTS history_search_id; ALTER TABLE history DROP COLUMN search_id; PRAGMA user_version=2`)
 	if err != nil {
 		t.Fatal(err)
@@ -141,7 +143,7 @@ func TestSQLiteV2SearchIndexUpgrade(t *testing.T) {
 	}
 	defer s.db.Close()
 	var version, n int
-	if err := s.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != 3 {
+	if err := s.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != 4 {
 		t.Fatal("schema not upgraded", version, err)
 	}
 	if err := s.db.QueryRow("SELECT count(*) FROM history_search").Scan(&n); err != nil || n != 1 {

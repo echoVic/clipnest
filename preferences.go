@@ -115,6 +115,13 @@ func newPreferencesWindow(d *Desktop) *preferencesWindow {
 		removeExcludedApp: func(id string) {
 			p.run(func() error { _, err := d.RemoveExcludedApp(id); return err }, "已移除，下一次复制重新判断", false)
 		},
+		imageText: func(on bool) {
+			success := "已关闭，识别的文字已删除"
+			if on {
+				success = "已开启，图片会在后台逐张识别"
+			}
+			p.run(func() error { _, err := d.SetImageText(on); return err }, success, false)
+		},
 		migrate: func() {
 			p.run(func() error { _, err := d.MigrateStorage(); return err }, "本地存储已更新", false)
 		},

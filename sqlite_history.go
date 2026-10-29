@@ -30,8 +30,12 @@ func (s *sqliteStore) enableLive() error {
 }
 
 func insertEntrySQL(tx *sql.Tx, e Entry, position int64) error {
-	_, err := tx.Exec(`INSERT INTO history(id,position,source,created,kind,title,excerpt,width,height,byte_size,source_search,search_id)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?,(SELECT coalesce(max(search_id),0)+1 FROM history))`, e.ID, position, e.Source, e.Created, e.Kind, e.Title, e.Excerpt, e.Width, e.Height, e.size(), strings.ToLower(e.Source))
+	state := ocrDone
+	if imageTextEligible(e) {
+		state = ocrPending
+	}
+	_, err := tx.Exec(`INSERT INTO history(id,position,source,created,kind,title,excerpt,width,height,byte_size,source_search,ocr_state,search_id)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,(SELECT coalesce(max(search_id),0)+1 FROM history))`, e.ID, position, e.Source, e.Created, e.Kind, e.Title, e.Excerpt, e.Width, e.Height, e.size(), strings.ToLower(e.Source), state)
 	if err != nil {
 		return err
 	}

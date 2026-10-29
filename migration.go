@@ -16,6 +16,7 @@ type StorageStatus struct {
 	MigrationAvailable bool            `json:"migrationAvailable"`
 	CleanupPending     bool            `json:"cleanupPending"`
 	Retention          RetentionPolicy `json:"retention"`
+	ImageText          bool            `json:"imageText"`
 }
 
 // Storage owns the shared database; history and phrases keep their existing
@@ -250,7 +251,7 @@ func (s *Storage) statusLocked() StorageStatus {
 		p = *s.History.db.policy.Load()
 	}
 	if s.sqlite.Load() {
-		return StorageStatus{Backend: "sqlite", CleanupPending: s.cleanup.Load(), Retention: p}
+		return StorageStatus{Backend: "sqlite", CleanupPending: s.cleanup.Load(), Retention: p, ImageText: s.History.db != nil && s.History.db.imageText.Load()}
 	}
 	return StorageStatus{Backend: "json", MigrationAvailable: true, Retention: p}
 }

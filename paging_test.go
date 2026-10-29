@@ -170,7 +170,7 @@ func TestSQLiteV1Upgrade(t *testing.T) {
 	}
 	// Build an actual v1 schema to exercise upgrade rather than changing only
 	// the version number on a current database.
-	_, err = db.db.Exec(`DROP TRIGGER history_search_delete; DROP TABLE history_search;
+	_, err = db.db.Exec(`DROP TRIGGER history_search_delete; DROP TABLE history_search; DROP TABLE history_ocr;
 		DROP TABLE history_content; DROP TABLE history; DROP TABLE settings;
 		CREATE TABLE history(id TEXT PRIMARY KEY,position INTEGER NOT NULL,source TEXT NOT NULL,created INTEGER NOT NULL);
 		CREATE TABLE history_content(id TEXT PRIMARY KEY REFERENCES history(id) ON DELETE CASCADE,text TEXT NOT NULL,image BLOB);

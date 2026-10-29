@@ -45,6 +45,7 @@ func (d *Desktop) ready() {
 	d.createTray()
 	d.win.OnReadyToShow(d.openPanel)
 	go d.monitor()
+	go d.runImageText()
 }
 
 // Cancel pending opens and reads before releasing a hidden panel's snapshot.

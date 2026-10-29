@@ -22,6 +22,10 @@ export interface Entry {
   image?: string;
   width?: number;
   height?: number;
+  /** detail only */
+  imageText?: string;
+  /** detail only, images */
+  imageTextState?: ImageTextState;
 }
 
 export interface ExcludedApp {
@@ -34,6 +38,9 @@ export interface HistoryPage {
   total: number;
   offset: number;
 }
+
+/** ImageTextState describes an image's recognized text in the preview. */
+export type ImageTextState = "pending" | "ready" | "failed" | "disabled" | "tooLarge" | "needsSQLite" | "unsupported";
 
 export interface PanelState {
   session: number;
@@ -77,6 +84,7 @@ export interface StorageStatus {
   migrationAvailable: boolean;
   cleanupPending: boolean;
   retention: RetentionPolicy;
+  imageText: boolean;
 }
 
 /** ThemeSource selects the appearance of the app. */
@@ -108,6 +116,13 @@ export const Desktop = {
   },
   confirmClipboardPermission(): Promise<PanelState> {
     return call("Desktop.ConfirmClipboardPermission");
+  },
+  /**
+   * CopyImageText copies an image's recognized text the way InsertPhrase copies
+   * a phrase, so the text does not become a history entry.
+   */
+  copyImageText(session: number, id: string): Promise<PasteResult> {
+    return call("Desktop.CopyImageText", session, id);
   },
   delete(session: number, id: string): Promise<PanelState> {
     return call("Desktop.Delete", session, id);
@@ -196,6 +211,9 @@ export const Desktop = {
   },
   setAppearance(source: ThemeSource): Promise<void> {
     return call("Desktop.SetAppearance", source);
+  },
+  setImageText(enabled: boolean): Promise<PanelState> {
+    return call("Desktop.SetImageText", enabled);
   },
   state(): Promise<PanelState> {
     return call("Desktop.State");

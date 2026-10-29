@@ -16,9 +16,11 @@ const databaseName = "clipnest.sqlite3"
 const databaseAppID = 0x434c504e
 
 type sqliteStore struct {
-	db      *sql.DB
-	writeMu sync.Mutex
-	policy  atomic.Pointer[RetentionPolicy]
+	db             *sql.DB
+	writeMu        sync.Mutex
+	policy         atomic.Pointer[RetentionPolicy]
+	imageText      atomic.Bool // mirrors settings.ocr_enabled after each commit
+	imageTextEpoch atomic.Uint64
 }
 
 // Files are created privately before SQLite opens them. Staging uses one
@@ -51,14 +53,14 @@ func openSQLite(path string, create bool) (*sqliteStore, error) {
 		err = s.transaction(func(tx *sql.Tx) error {
 			_, err := tx.Exec(`
 				PRAGMA application_id = 1129074766;
-				PRAGMA user_version = 3;
+				PRAGMA user_version = 4;
 				CREATE TABLE history (
 					id TEXT PRIMARY KEY, position INTEGER NOT NULL,
 					search_id INTEGER NOT NULL,
 					source TEXT NOT NULL, created INTEGER NOT NULL,
 					kind TEXT NOT NULL, title TEXT NOT NULL, excerpt TEXT NOT NULL,
 					width INTEGER NOT NULL, height INTEGER NOT NULL, byte_size INTEGER NOT NULL,
-					source_search TEXT NOT NULL
+					source_search TEXT NOT NULL, ` + imageTextStateColumn + `
 				);
 				CREATE INDEX history_order ON history(position);
 				CREATE INDEX history_kind_order ON history(kind, position);
@@ -75,10 +77,10 @@ func openSQLite(path string, create bool) (*sqliteStore, error) {
 					id INTEGER PRIMARY KEY CHECK (id = 1),
 					paused INTEGER NOT NULL CHECK (paused IN (0, 1)),
 					max_mib INTEGER NOT NULL DEFAULT 512,
-					keep_days INTEGER NOT NULL DEFAULT 0
+					keep_days INTEGER NOT NULL DEFAULT 0, ` + imageTextEnabledColumn + `
 				);
 				INSERT INTO settings(id, paused) VALUES (1, 0);
-			` + searchSchema)
+			` + searchSchema + imageTextSchema)
 			return err
 		})
 	} else {
@@ -87,7 +89,7 @@ func openSQLite(path string, create bool) (*sqliteStore, error) {
 		if err == nil {
 			err = db.QueryRow("PRAGMA user_version").Scan(&version)
 		}
-		if err == nil && (appID != databaseAppID || (version < 1 || version > 3)) {
+		if err == nil && (appID != databaseAppID || (version < 1 || version > 4)) {
 			err = errors.New("不支持此数据库格式或版本")
 		}
 		if err == nil && version == 1 {
@@ -96,15 +98,20 @@ func openSQLite(path string, create bool) (*sqliteStore, error) {
 		if err == nil && version < 3 {
 			err = s.upgradeSearch()
 		}
+		if err == nil && version < 4 {
+			err = s.upgradeImageText()
+		}
 	}
 	if err == nil {
 		var p RetentionPolicy
-		err = db.QueryRow("SELECT max_mib, keep_days FROM settings WHERE id = 1").Scan(&p.MaxMiB, &p.KeepDays)
+		var imageText bool
+		err = db.QueryRow("SELECT max_mib, keep_days, ocr_enabled FROM settings WHERE id = 1").Scan(&p.MaxMiB, &p.KeepDays, &imageText)
 		if err == nil {
 			err = p.validate()
 		}
 		if err == nil {
 			s.policy.Store(&p)
+			s.imageText.Store(imageText)
 		}
 	}
 	if err != nil {

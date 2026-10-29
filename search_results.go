@@ -24,9 +24,8 @@ func searchSQL(q, kind string) (string, []any) {
 		query := `SELECT h.search_id FROM history h WHERE h.search_id IN (
 			SELECT rowid FROM history_search WHERE history_search MATCH ?
 			UNION SELECT h.search_id FROM history_search
-				JOIN history h ON h.search_id=history_search.rowid
-				JOIN history_content c ON c.id=h.id
-				WHERE history_search MATCH 'overflow' AND instr(c.search_prefix || h.source_search,?)>0
+				JOIN history h ON h.search_id=history_search.rowid` + searchDocumentJoin + `
+				WHERE history_search MATCH 'overflow' AND instr(` + searchDocumentSQL + `,?)>0
 		)`
 		args := []any{g.token(), q}
 		if kind != "" {
@@ -35,12 +34,12 @@ func searchSQL(q, kind string) (string, []any) {
 		}
 		return query + " ORDER BY h.position", args
 	}
-	from := " FROM history h JOIN history_content c ON c.id=h.id"
+	from := " FROM history h" + searchDocumentJoin
 	// Most hits are inside one field. Short-circuit there without copying a
 	// large prefix for every candidate. Only the small byte tail is needed
 	// for matches crossing into source; BLOB substr preserves embedded NUL.
-	where := ` WHERE (instr(c.search_prefix,?)>0 OR instr(h.source_search,?)>0
-		OR instr(CAST(substr(CAST(c.search_prefix AS BLOB),-?) AS TEXT)||h.source_search,?)>0)`
+	where := ` WHERE (instr(coalesce(o.search,c.search_prefix),?)>0 OR instr(h.source_search,?)>0
+		OR instr(CAST(substr(CAST(coalesce(o.search,c.search_prefix) AS BLOB),-?) AS TEXT)||h.source_search,?)>0)`
 	args := []any{q, q, len(q) - 1, q}
 	if kind != "" {
 		where += " AND h.kind=?"

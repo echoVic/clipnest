@@ -21,21 +21,24 @@ const maxItems = 200
 const maxBytes = 32 << 20
 const maxText = 512 << 10
 const maxImage = 8 << 20
+const defaultImageTitle = "复制的图片"
 
 // Entry owns immutable content. Panel sessions retain their own snapshot so
 // new copies cannot shift the numbers underneath a user's fingers.
 type Entry struct {
-	ID         string `json:"id"`
-	Kind       string `json:"kind"`
-	Title      string `json:"title"`
-	Excerpt    string `json:"excerpt"`
-	Source     string `json:"source"`
-	Created    int64  `json:"created"`
-	Text       string `json:"text,omitempty"`
-	Image      []byte `json:"image,omitempty"`
-	Width      int    `json:"width,omitempty"`
-	Height     int    `json:"height,omitempty"`
-	searchText string // immutable derived search representation; never persisted
+	ID             string         `json:"id"`
+	Kind           string         `json:"kind"`
+	Title          string         `json:"title"`
+	Excerpt        string         `json:"excerpt"`
+	Source         string         `json:"source"`
+	Created        int64          `json:"created"`
+	Text           string         `json:"text,omitempty"`
+	Image          []byte         `json:"image,omitempty"`
+	Width          int            `json:"width,omitempty"`
+	Height         int            `json:"height,omitempty"`
+	ImageText      string         `json:"imageText,omitempty"`      // detail only
+	ImageTextState ImageTextState `json:"imageTextState,omitempty"` // detail only, images
+	searchText     string         // immutable derived search representation; never persisted
 }
 
 func newEntry(text string, png []byte, source string) (Entry, error) {
@@ -50,7 +53,7 @@ func newEntry(text string, png []byte, source string) (Entry, error) {
 			return e, errors.New("图片无法读取或尺寸过大")
 		}
 		e.Kind, e.Image, e.Width, e.Height = "image", bytes.Clone(png), c.Width, c.Height
-		e.Title, e.Excerpt = "复制的图片", fmt.Sprintf("%d × %d · PNG", c.Width, c.Height)
+		e.Title, e.Excerpt = defaultImageTitle, fmt.Sprintf("%d × %d · PNG", c.Width, c.Height)
 		payload = png
 	} else {
 		if strings.TrimSpace(text) == "" {
@@ -85,8 +88,11 @@ func shorten(s string, n int) string {
 	}
 	return s
 }
-func (e Entry) size() int      { return len(e.Text) + len(e.Image) }
-func (e Entry) summary() Entry { e.Text = ""; e.Image = nil; e.searchText = ""; return e }
+func (e Entry) size() int { return len(e.Text) + len(e.Image) }
+func (e Entry) summary() Entry {
+	e.Text, e.Image, e.ImageText, e.ImageTextState, e.searchText = "", nil, "", "", ""
+	return e
+}
 
 type History struct {
 	mu           sync.Mutex

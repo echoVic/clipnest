@@ -90,11 +90,20 @@ const searchSchema = `
 		DELETE FROM history_search WHERE rowid=OLD.search_id;
 	END;`
 
+// An image's recognized text replaces its search prefix (image_text.go).
+const searchDocumentSQL = "coalesce(o.search,c.search_prefix) || h.source_search"
+const searchDocumentJoin = " JOIN history_content c ON c.id=h.id LEFT JOIN history_ocr o ON o.id=h.id"
+
 func replaceSearchSQL(tx *sql.Tx, id string) error {
+	return writeSearchSQL(tx, `SELECT h.search_id,`+searchDocumentSQL+` FROM history h`+searchDocumentJoin+` WHERE h.id=?`, id)
+}
+
+// writeSearchSQL indexes the document selected by query. Upgrades pass the
+// document of their own schema version; later tables do not exist yet.
+func writeSearchSQL(tx *sql.Tx, query, id string) error {
 	var searchID int64
 	var text string
-	if err := tx.QueryRow(`SELECT h.search_id,c.search_prefix || h.source_search
-		FROM history h JOIN history_content c ON c.id=h.id WHERE h.id=?`, id).Scan(&searchID, &text); err != nil {
+	if err := tx.QueryRow(query, id).Scan(&searchID, &text); err != nil {
 		return err
 	}
 	if _, err := tx.Exec("DELETE FROM history_search WHERE rowid=?", searchID); err != nil {
@@ -146,7 +155,8 @@ func (s *sqliteStore) upgradeSearch() error {
 				break
 			}
 			for _, id := range ids {
-				if err := replaceSearchSQL(tx, id); err != nil {
+				if err := writeSearchSQL(tx, `SELECT h.search_id,c.search_prefix || h.source_search
+					FROM history h JOIN history_content c ON c.id=h.id WHERE h.id=?`, id); err != nil {
 					return err
 				}
 			}

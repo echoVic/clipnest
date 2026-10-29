@@ -183,16 +183,25 @@ func (v *historyView) Detail(id string) (Entry, error) {
 	if v.tx == nil {
 		for _, e := range v.legacy {
 			if e.ID == id {
+				if e.Kind == "image" {
+					e.ImageTextState = imageTextNeedsSQLite
+					if !imageTextSupported {
+						e.ImageTextState = imageTextUnsupported
+					}
+				}
 				return e, nil
 			}
 		}
 		return Entry{}, errors.New("这条内容已移除")
 	}
-	var text, source string
+	var text, source, imageText string
 	var image []byte
 	var created int64
-	err := v.tx.QueryRowContext(v.ctx, `SELECT c.text,c.image,h.source,h.created FROM history h
-		JOIN history_content c ON c.id=h.id WHERE h.id=?`, id).Scan(&text, &image, &source, &created)
+	var state int
+	var enabled bool
+	err := v.tx.QueryRowContext(v.ctx, `SELECT c.text,c.image,h.source,h.created,h.ocr_state,coalesce(o.text,''),
+		(SELECT ocr_enabled FROM settings WHERE id=1) FROM history h`+searchDocumentJoin+` WHERE h.id=?`, id).Scan(
+		&text, &image, &source, &created, &state, &imageText, &enabled)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Entry{}, errors.New("这条内容已移除")
 	}
@@ -207,5 +216,6 @@ func (v *historyView) Detail(id string) (Entry, error) {
 		return Entry{}, errors.New("历史内容与标识不一致")
 	}
 	e.Created = created
+	imageTextDetail(&e, state, imageText, enabled)
 	return e, nil
 }
