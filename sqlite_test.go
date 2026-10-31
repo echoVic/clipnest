@@ -501,3 +501,23 @@ func TestMigrationArchiveFixture(t *testing.T) {
 	}
 	t.Logf("verified %d history entries and %d phrases; source files untouched", len(got), len(phrases))
 }
+
+func TestSQLiteFileURI(t *testing.T) {
+	cases := []struct {
+		name string
+		path string
+		want string
+	}{
+		{"unix absolute", "/tmp/clipnest/clipnest.sqlite3", "file:///tmp/clipnest/clipnest.sqlite3"},
+		{"unix space", "/tmp/app data/clipnest.sqlite3", "file:///tmp/app%20data/clipnest.sqlite3"},
+		{"windows drive", `C:\Users\cocoon\AppData\Roaming\Clipnest\clipnest.sqlite3`, "file:///C:/Users/cocoon/AppData/Roaming/Clipnest/clipnest.sqlite3"},
+		{"windows staging", `C:\Users\a b\.clipnest-migration-1\clipnest.sqlite3`, "file:///C:/Users/a%20b/.clipnest-migration-1/clipnest.sqlite3"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := sqliteFileURI(tc.path); got != tc.want {
+				t.Fatalf("sqliteFileURI(%q) = %q, want %q", tc.path, got, tc.want)
+			}
+		})
+	}
+}
