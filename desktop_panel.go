@@ -152,8 +152,13 @@ func (d *Desktop) openPanel() {
 	// displays previously left stale compositing tiles.
 	d.win.SetSize(bounds.Width, bounds.Height)
 	d.win.SetPosition(bounds.X, bounds.Y)
+	// Windows denies SetForegroundWindow for a while after auto-paste handed
+	// the foreground to another app. Sharing that thread's input queue makes
+	// Show/Focus take the foreground instead of leaving the panel hidden.
+	releaseForeground := d.n.acquireForeground()
 	d.win.Show()
 	d.win.Focus()
+	releaseForeground()
 	_ = panelChanged.Broadcast(d.reload())
 }
 
