@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo"
@@ -57,5 +58,20 @@ func TestPanelPlacementFitsPointerDisplay(t *testing.T) {
 		if got.Y != area.Y+(area.Height-got.Height)/3 {
 			t.Fatal("opening placement changed")
 		}
+	}
+}
+
+func TestShortcutChoicesAvoidIMEReservedChordsOnWindows(t *testing.T) {
+	win := shortcutChoicesFor("windows")
+	if len(win) < 2 || win[0].accelerator != "CmdOrCtrl+Alt+V" {
+		t.Fatalf("windows primary shortcut must be Ctrl+Alt+V: %+v", win)
+	}
+	for _, c := range win {
+		if strings.Contains(c.accelerator, "Alt+Shift") {
+			t.Fatalf("Alt+Shift is claimed by the input-language switch on Windows: %q", c.accelerator)
+		}
+	}
+	if c := shortcutChoicesFor("darwin"); c[0].accelerator != "CmdOrCtrl+Shift+V" {
+		t.Fatalf("macOS shortcut changed: %+v", c)
 	}
 }
