@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.9 - 开发中
+
+- 新增 Windows（amd64）支持：后台记录文字与 PNG 图片，历史搜索、预览、常用语、偏好设置和本地 SQLite 全部可用；数据保存在 `%AppData%\Clipnest`
+- Windows 下用 **Ctrl+Alt+V** 唤起面板（中文等带输入法的系统里 Ctrl+Shift 与 Alt+Shift 会被键盘布局切换占用，热键能注册但不会触发），被占用时回退 **Ctrl+Shift+V**；选择条目后自动粘贴回原应用（模拟 Ctrl+V），也可以仅复制；面板键位提示在 Windows 上显示 Ctrl/Alt/Shift
+- 提供 NSIS 安装器，当前版本未做代码签名，首次安装和运行需要在 SmartScreen 提示中选择保留并运行
+- 图片文字识别（OCR）与按应用排除记录仍仅支持 macOS；Windows 不读取也不需要辅助功能与剪贴板隐私授权
+
 ## 0.1.8 - 2026-10-29
 
 - 新增本地图片文字识别：用 macOS 自带的 Vision 在本机识别截图中的中英文、代码和链接，不联网；在后台逐张进行，不阻塞复制、粘贴或面板
