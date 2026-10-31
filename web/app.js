@@ -34,7 +34,7 @@ const pages = new PagedList(async (context, offset, limit) => {
 const currentEntry = () => pages.entry(pages.selected);
 const context = () => ({ session: state.session, revision: queryVersion, q: $('#search').value, kind, view });
 const blocked = () => busy || queryPending || !!pages.error || pages.retrying || (view === 'history' && state.loading);
-let rows = Object.create(null), paintedSelection = -1;
+let rows = Object.create(null), paintedSelection = -1, paintedRange = { start: 0, end: 0, total: 0 };
 let migrating = false, migrationDismissed = false, migrationError = '', savingRetention = false, retentionDirty = false;
 const labels = { text: '文字', link: '链接', code: '代码', image: '图片' };
 const call = (method, ...args) => api.call(method, ...args);
@@ -294,6 +294,7 @@ function renderWindow() {
   fragment.append(spacer(range.bottom));
   list.replaceChildren(fragment);
   updateSelection(rows, paintedSelection, pages.selected); paintedSelection = pages.selected;
+  paintedRange = { start: range.start, end: range.end, total: pages.error ? 0 : pages.total };
   const current = rows[pages.selected];
   if (current) list.setAttribute('aria-activedescendant', current.id);
   else list.removeAttribute('aria-activedescendant');
@@ -314,8 +315,22 @@ function emptyState(filtered) {
 }
 function select(index) { if (blocked() || index === pages.selected) return; pages.select(index); selectionChanged(); }
 function selectionChanged() {
-  $('#list').scrollTop = scrollForIndex(pages.selected, $('#list').scrollTop, $('#list').clientHeight);
-  renderWindow();
+  const list = $('#list');
+  const total = pages.error ? 0 : pages.total;
+  list.scrollTop = scrollForIndex(pages.selected, list.scrollTop, list.clientHeight);
+  const range = virtualRange(total, list.scrollTop, list.clientHeight || 280);
+  const current = rows[pages.selected];
+  // While the painted window still covers the new selection, move only the
+  // active row instead of rebuilding every row and its listeners. Crossing a
+  // virtualized edge recycles the window; the scroll listener does the same
+  // after programmatic scrolling.
+  if (current && range.start === paintedRange.start && range.end === paintedRange.end && total === paintedRange.total) {
+    updateSelection(rows, paintedSelection, pages.selected); paintedSelection = pages.selected;
+    list.setAttribute('aria-activedescendant', current.id);
+    if (!blocked() && pages.selected >= 0 && !currentEntry()) pages.ensure(Math.floor(pages.selected / PAGE_SIZE) * PAGE_SIZE);
+  } else {
+    renderWindow();
+  }
   updatePreview();
 }
 function actionButtons() { $('#paste').disabled = $('#copy-only').disabled = blocked() || !currentEntry() || choosing; }
