@@ -152,8 +152,13 @@ func (d *Desktop) openPanel() {
 	// displays previously left stale compositing tiles.
 	d.win.SetSize(bounds.Width, bounds.Height)
 	d.win.SetPosition(bounds.X, bounds.Y)
+	// Windows denies SetForegroundWindow for a while after auto-paste handed
+	// the foreground to another app. Sharing that thread's input queue makes
+	// Show/Focus take the foreground instead of leaving the panel hidden.
+	releaseForeground := d.n.acquireForeground()
 	d.win.Show()
 	d.win.Focus()
+	releaseForeground()
 	_ = panelChanged.Broadcast(d.reload())
 }
 
@@ -169,20 +174,45 @@ func (d *Desktop) show() {
 	d.openPanel()
 }
 
+type shortcutChoice struct {
+	accelerator string
+	label       string
+}
+
+// shortcutChoices returns the global hotkeys to try, in order. On Windows
+// with an IME installed (e.g. Chinese systems), Ctrl+Shift and Alt+Shift are
+// claimed by the keyboard-layout switch: RegisterHotKey still succeeds but
+// WM_HOTKEY never arrives and the chord leaks to the focused window.
+func shortcutChoicesFor(goos string) []shortcutChoice {
+	switch goos {
+	case "darwin":
+		return []shortcutChoice{
+			{"CmdOrCtrl+Shift+V", "⌘ ⇧ V"},
+			{"Alt+Shift+V", "⌥ ⇧ V"},
+		}
+	case "windows":
+		return []shortcutChoice{
+			{"CmdOrCtrl+Alt+V", "Ctrl Alt V"},
+			{"CmdOrCtrl+Shift+V", "Ctrl Shift V"},
+		}
+	default:
+		return []shortcutChoice{
+			{"CmdOrCtrl+Shift+V", "Ctrl Shift V"},
+			{"Alt+Shift+V", "Alt Shift V"},
+		}
+	}
+}
+
 func (d *Desktop) registerShortcuts() {
-	if err := mygo.GlobalShortcut.Register("CmdOrCtrl+Shift+V", d.show); err != nil {
-		d.shortcut = "⌥ ⇧ V"
-		if err := mygo.GlobalShortcut.Register("Alt+Shift+V", d.show); err != nil {
+	choices := shortcutChoicesFor(runtime.GOOS)
+	d.shortcut = choices[0].label
+	if err := mygo.GlobalShortcut.Register(choices[0].accelerator, d.show); err != nil {
+		d.shortcut = choices[1].label
+		if err := mygo.GlobalShortcut.Register(choices[1].accelerator, d.show); err != nil {
 			d.shortcut = "菜单栏打开"
 			d.notice = "快捷键已被占用，请从菜单栏打开"
 		} else {
-			d.notice = "⌘⇧V 已被占用，已改用 ⌥⇧V"
+			d.notice = choices[0].label + " 已被占用，已改用 " + choices[1].label
 		}
-	}
-	if runtime.GOOS != "darwin" && d.shortcut == "⌘ ⇧ V" {
-		d.shortcut = "Ctrl Shift V"
-	}
-	if runtime.GOOS != "darwin" && d.shortcut == "⌥ ⇧ V" {
-		d.shortcut = "Alt Shift V"
 	}
 }

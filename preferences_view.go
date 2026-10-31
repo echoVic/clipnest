@@ -204,6 +204,8 @@ func (v *preferencesView) privacy(c *ui.Context) {
 	v.group(c, "自动粘贴", func() {
 		v.row(c, "辅助功能", "允许后，选完即可粘贴到原应用；未授权时仍可「仅复制」。", func() {
 			switch {
+			case v.state.Platform == "windows":
+				ui.Text(c, "已启用，选完直接粘贴回原应用").TextColor(c.Theme().TextMuted)
 			case v.state.Platform != "darwin":
 				ui.Text(c, "此系统使用「仅复制」")
 			case v.state.Accessible:

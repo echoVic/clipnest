@@ -34,7 +34,7 @@ const pages = new PagedList(async (context, offset, limit) => {
 const currentEntry = () => pages.entry(pages.selected);
 const context = () => ({ session: state.session, revision: queryVersion, q: $('#search').value, kind, view });
 const blocked = () => busy || queryPending || !!pages.error || pages.retrying || (view === 'history' && state.loading);
-let rows = Object.create(null), paintedSelection = -1;
+let rows = Object.create(null), paintedSelection = -1, paintedRange = { start: 0, end: 0, total: 0 };
 let migrating = false, migrationDismissed = false, migrationError = '', savingRetention = false, retentionDirty = false;
 const labels = { text: '文字', link: '链接', code: '代码', image: '图片' };
 const call = (method, ...args) => api.call(method, ...args);
@@ -62,8 +62,9 @@ function header() {
   $('#app-version').textContent = `Clipnest ${state.version || '开发版'}`;
   $('#notice').hidden = !state.notice; $('#notice').textContent = state.notice;
   $('#count').textContent = state.total;
-  $('#permission-status').textContent = demo ? '演示模式，桌面版可粘贴到原应用。' : state.platform !== 'darwin' ? '此系统使用「仅复制」，自动粘贴支持 macOS。' : state.accessible ? '已允许，选完即可粘贴到原应用。' : '允许辅助功能，选完直接粘贴。';
-  $('#permission').hidden = demo || state.platform !== 'darwin' || state.accessible;
+  const pastePlatform = state.platform === 'darwin' || state.platform === 'windows';
+  $('#permission-status').textContent = demo ? '演示模式，桌面版可粘贴到原应用。' : !pastePlatform ? '此系统使用「仅复制」，自动粘贴支持 macOS 与 Windows。' : state.accessible ? '已允许，选完即可粘贴到原应用。' : '允许辅助功能，选完直接粘贴。';
+  $('#permission').hidden = demo || !pastePlatform || state.accessible;
   clipboardPrompt();
   storagePrompt();
   imageTextPrompt();
@@ -195,12 +196,30 @@ function invalidateSearch(firstPage) {
   });
   return version;
 }
+// Static hint markup uses macOS glyphs; on Windows the same shortcuts use
+// Ctrl/Alt, so rewrite them once the platform is known.
+let platformHintsApplied = false;
+function adaptPlatformHints() {
+  if (platformHintsApplied || state.platform !== 'windows') return;
+  platformHintsApplied = true;
+  const glyphs = { '⌘': 'Ctrl', '⌥': 'Alt', '⇧': 'Shift' };
+  const map = text => text.replace(/[⌘⌥⇧]/g, ch => ` ${glyphs[ch]} `).replace(/\s+/g, ' ').trim();
+  document.querySelectorAll('kbd').forEach(el => {
+    // The summon hints reflect the shortcut actually registered by the app,
+    // which on IME-enabled Windows is Ctrl+Alt+V rather than Ctrl+Shift+V.
+    if (el.closest('#reopen')) { el.textContent = state.shortcut; return; }
+    el.textContent = map(el.textContent);
+  });
+  const emptyHint = document.querySelector('#empty p strong');
+  if (emptyHint) emptyHint.textContent = state.shortcut;
+  document.querySelectorAll('[title]').forEach(el => { if (/[⌘⌥⇧]/.test(el.title)) el.title = map(el.title); });
+}
 function applyState(next, reopen = false) {
   if (!acceptPanel(state, next)) return;
   const fresh = next.session !== state.session, completed = state.loading && !next.loading;
   // Do not retain a second copy of the first page after it enters the LRU.
   const { entries: firstEntries = [], ...metadata } = next;
-  state = metadata; header();
+  state = metadata; adaptPlatformHints(); header();
   if (reopen && fresh) {
     $('#search').value = ''; $('#clear-search').hidden = true; kind = 'all'; view = 'history'; showView();
     $$('.filters button').forEach(b => { b.classList.toggle('active', b.dataset.kind === kind); b.setAttribute('aria-pressed', b.dataset.kind === kind); });
@@ -294,6 +313,7 @@ function renderWindow() {
   fragment.append(spacer(range.bottom));
   list.replaceChildren(fragment);
   updateSelection(rows, paintedSelection, pages.selected); paintedSelection = pages.selected;
+  paintedRange = { start: range.start, end: range.end, total: pages.error ? 0 : pages.total };
   const current = rows[pages.selected];
   if (current) list.setAttribute('aria-activedescendant', current.id);
   else list.removeAttribute('aria-activedescendant');
@@ -314,8 +334,22 @@ function emptyState(filtered) {
 }
 function select(index) { if (blocked() || index === pages.selected) return; pages.select(index); selectionChanged(); }
 function selectionChanged() {
-  $('#list').scrollTop = scrollForIndex(pages.selected, $('#list').scrollTop, $('#list').clientHeight);
-  renderWindow();
+  const list = $('#list');
+  const total = pages.error ? 0 : pages.total;
+  list.scrollTop = scrollForIndex(pages.selected, list.scrollTop, list.clientHeight);
+  const range = virtualRange(total, list.scrollTop, list.clientHeight || 280);
+  const current = rows[pages.selected];
+  // While the painted window still covers the new selection, move only the
+  // active row instead of rebuilding every row and its listeners. Crossing a
+  // virtualized edge recycles the window; the scroll listener does the same
+  // after programmatic scrolling.
+  if (current && range.start === paintedRange.start && range.end === paintedRange.end && total === paintedRange.total) {
+    updateSelection(rows, paintedSelection, pages.selected); paintedSelection = pages.selected;
+    list.setAttribute('aria-activedescendant', current.id);
+    if (!blocked() && pages.selected >= 0 && !currentEntry()) pages.ensure(Math.floor(pages.selected / PAGE_SIZE) * PAGE_SIZE);
+  } else {
+    renderWindow();
+  }
   updatePreview();
 }
 function actionButtons() { $('#paste').disabled = $('#copy-only').disabled = blocked() || !currentEntry() || choosing; }
@@ -395,7 +429,7 @@ async function phrasePreview(entry, version) {
       $('#preview-body').replaceChildren(node('p', 'preview-text', p.text));
     }
     $('#preview-body').scrollTop = 0;
-    const edit = node('button', 'icon-button edit-phrase'); edit.title = '编辑（⌘E）'; edit.setAttribute('aria-label', '编辑这条常用语'); edit.append(icon('edit')); edit.onclick = editPhrase;
+    const edit = node('button', 'icon-button edit-phrase'); edit.title = state.platform === 'windows' ? '编辑（Ctrl E）' : '编辑（⌘E）'; edit.setAttribute('aria-label', '编辑这条常用语'); edit.append(icon('edit')); edit.onclick = editPhrase;
     const remove = node('button', 'icon-button delete-entry'); remove.title = '删除这条常用语'; remove.setAttribute('aria-label', '删除这条常用语'); remove.append(icon('trash')); remove.onclick = askDeletePhrase;
     const actions = node('span', 'meta-actions'); actions.append(edit, remove);
     $('#preview-meta').replaceChildren(node('span', '', `${characterCount(p.text)} 个字符`), actions);
@@ -412,7 +446,7 @@ async function choose(copyOnly, pick) {
   try {
     const ticket = await pages.pick();
     if (!pages.isCurrent(ticket) || blocked()) return;
-    if (!copyOnly && (demo || state.platform === 'darwin') && !state.accessible) {
+    if (!copyOnly && (demo || state.platform === 'darwin' || state.platform === 'windows') && !state.accessible) {
       const accessible = await call('Permission');
       if (!pages.isCurrent(ticket) || blocked()) return;
       state.accessible = accessible; header();

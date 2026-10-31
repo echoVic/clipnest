@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -14,6 +15,17 @@ import (
 
 const databaseName = "clipnest.sqlite3"
 const databaseAppID = 0x434c504e
+
+// sqliteFileURI turns an OS filesystem path into a SQLite file URI. A bare
+// Windows "C:\…" path otherwise parses as an "C:" authority and fails; the
+// leading slash yields the canonical file:///C:/… form.
+func sqliteFileURI(path string) string {
+	slash := strings.ReplaceAll(path, "\\", "/")
+	if !strings.HasPrefix(slash, "/") {
+		slash = "/" + slash
+	}
+	return "file://" + (&url.URL{Path: slash}).EscapedPath()
+}
 
 type sqliteStore struct {
 	db             *sql.DB
@@ -36,10 +48,9 @@ func openSQLite(path string, create bool) (*sqliteStore, error) {
 			return nil, err
 		}
 	}
-	u := url.URL{Scheme: "file", Path: path}
 	q := url.Values{"mode": {"rw"}, "_pragma": {"busy_timeout(5000)", "synchronous(FULL)", "secure_delete(ON)", "foreign_keys(ON)"}}
-	u.RawQuery = q.Encode()
-	db, err := sql.Open("sqlite", u.String())
+	dsn := sqliteFileURI(path) + "?" + q.Encode()
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err
 	}

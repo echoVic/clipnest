@@ -263,7 +263,7 @@ func (d *Desktop) deliver(e Entry, copyOnly bool, session uint64) (result PasteR
 		d.lastRevision = d.n.Revision()
 		d.lastID = e.ID
 		result.Copied = true
-		if copyOnly || runtime.GOOS != "darwin" || d.target.PID == 0 {
+		if copyOnly || !d.n.autoPaste() || d.target.PID == 0 {
 			result.Message = "已复制，返回目标应用即可粘贴"
 			return
 		}
@@ -299,7 +299,7 @@ func (d *Desktop) deliver(e Entry, copyOnly bool, session uint64) (result PasteR
 	mygo.RunOnMain(func() {
 		d.busy = false
 		if !result.Pasted {
-			d.notice = "内容已复制，未能自动粘贴。请返回原应用按 ⌘V。"
+			d.notice = "内容已复制，未能自动粘贴。请返回原应用按 " + manualPasteHint() + "。"
 			if d.tray != nil {
 				d.tray.SetToolTip("Clipnest · " + d.notice)
 			}

@@ -1,4 +1,4 @@
-//go:build !darwin
+//go:build !darwin && !windows
 
 package main
 
@@ -11,12 +11,17 @@ type targetApp struct {
 	BundleID string
 }
 
+var concealedFormats = []string(nil)
+
 func openNative() (*nativeBridge, error)               { return &nativeBridge{}, nil }
 func (*nativeBridge) Target() targetApp                { return targetApp{} }
 func (*nativeBridge) Activate(targetApp) bool          { return false }
+func (*nativeBridge) acquireForeground() func()        { return func() {} }
 func (*nativeBridge) Revision() int64                  { return -1 }
 func (*nativeBridge) ClipboardAccess() ClipboardAccess { return clipboardUnsupported }
 func (*nativeBridge) Accessible() bool                 { return false }
+func (*nativeBridge) autoPaste() bool                  { return false }
+func manualPasteHint() string                          { return "Ctrl+V" }
 func (*nativeBridge) ReadyToPaste(targetApp) bool      { return false }
 func (*nativeBridge) Application(string) (ExcludedApp, error) {
 	return ExcludedApp{}, errors.New("排除应用仅适用于 macOS")
