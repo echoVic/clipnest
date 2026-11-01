@@ -125,10 +125,11 @@ dialog{padding:25px;border-radius:17px;border:1px solid var(--line);background:v
 .excluded-app-sample-label{display:block;margin-bottom:8px;font-size:13px;font-weight:500}
 #excluded-app-sample{width:100%;min-width:0;padding:8px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--ink);font-size:12px}
 /* Image preview: the stage shrinks so recognized text shows below it; long
-   text scrolls with the preview while 复制文字 stays in the meta bar. */
+   text scrolls with the preview while 复制文字 stays in the meta bar.
+   Status-only states become a compact thumbnail + note row. */
 .image-preview{display:flex;flex-direction:column;gap:12px}
 .image-preview .image-stage{height:auto;flex-shrink:0;padding:6px}
-.image-preview.has-image-text .image-stage img{max-height:100px}
+.image-preview.has-image-text .image-stage img{max-height:100px}.image-preview.is-image-text-status{align-items:flex-start;flex-direction:row;gap:12px}.image-preview.is-image-text-status .image-stage{flex:0 0 104px;width:104px;padding:4px}.image-preview.is-image-text-status .image-stage img{max-height:64px}.image-preview.is-image-text-status .image-text{flex:1;min-width:0;border-top:0;padding-top:2px}
 .image-text{border-top:1px solid var(--line);padding-top:10px}
 .image-text-title{margin:0 0 6px;font-size:12px;font-weight:600;color:var(--ink)}
 .preview-meta .image-text-copy{min-height:23px;padding:0 9px;font-size:11px}

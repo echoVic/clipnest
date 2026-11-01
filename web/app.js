@@ -375,7 +375,12 @@ async function updatePreview() {
       imageText = imageTextPreview(document, e, () => copyImageText(session, e.id));
       content = stage;
       if (imageText) {
-        content = node('div', imageText.button ? 'image-preview has-image-text' : 'image-preview');
+        // Status-only states (disabled, pending, failed, needsSQLite…) use a
+        // compact thumbnail + note row so the explanation never scrolls out
+        // of view; the ready state keeps the stacked, larger preview.
+        content = node('div', imageText.button
+          ? 'image-preview has-image-text'
+          : 'image-preview has-image-text is-image-text-status');
         content.append(stage, imageText.section);
       }
     } else if (e.kind === 'link') {
