@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.9 - 开发中
+## 0.1.9 - 2026-11-01
 
 - 新增 Windows（amd64）支持：后台记录文字与 PNG 图片，历史搜索、预览、常用语、偏好设置和本地 SQLite 全部可用；数据保存在 `%AppData%\Clipnest`
 - Windows 下用 **Ctrl+Alt+V** 唤起面板（中文等带输入法的系统里 Ctrl+Shift 与 Alt+Shift 会被键盘布局切换占用，热键能注册但不会触发），被占用时回退 **Ctrl+Shift+V**；选择条目后自动粘贴回原应用（模拟 Ctrl+V），也可以仅复制；面板键位提示在 Windows 上显示 Ctrl/Alt/Shift
