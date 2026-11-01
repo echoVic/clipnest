@@ -22,7 +22,7 @@ export function imageTextPreview(document, e, copy) {
   };
   const section = node('section', 'image-text');
   section.setAttribute('aria-label', '图片文字');
-  section.append(node('span', 'eyebrow', '图片文字'));
+  section.append(node('h4', 'image-text-title', '图片文字'));
   if (e.imageTextState !== 'ready' || !e.imageText) {
     section.append(node('p', 'image-text-note', e.imageTextState === 'ready' ? '未识别到文字。' : notes[e.imageTextState] || '无法确认识别状态。'));
     return { section, button: null };
