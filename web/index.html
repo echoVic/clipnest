@@ -48,7 +48,7 @@
       <div id="list" class="list" role="listbox" tabindex="0" aria-label="复制历史"></div>
       <div id="empty" class="empty" role="status" hidden><div class="empty-art"><svg><use href="#i-copy"/></svg><span>+</span></div><h2>复制一下，好内容就留下了</h2><p>复制文字或图片后，在这里找回。<br>按 <strong>⌘⇧V</strong> 随时唤起。</p><button id="empty-new" type="button" class="primary" hidden>新建常用语</button><button id="list-retry" type="button" class="secondary" hidden>重试加载</button></div>
     </section>
-    <aside id="preview" class="preview" aria-label="选中内容预览"><div class="preview-id"><span class="eyebrow">内容预览</span><span id="type-label" class="type-label">文字</span></div><div id="preview-body" class="preview-body"></div><div id="preview-meta" class="preview-meta"></div><div class="preview-actions"><button id="copy-only" class="secondary"><svg><use href="#i-copy"/></svg>仅复制</button><button id="paste" class="primary">粘贴 <svg><use href="#i-arrow"/></svg></button></div></aside>
+    <aside id="preview" class="preview" aria-label="选中内容预览"><div class="preview-id"><h2 class="preview-title">内容预览</h2><span id="type-label" class="type-label">文字</span></div><div id="preview-body" class="preview-body"></div><div id="preview-meta" class="preview-meta"></div><div class="preview-actions"><button id="copy-only" class="secondary"><svg><use href="#i-copy"/></svg>仅复制</button><button id="paste" class="primary">粘贴 <svg><use href="#i-arrow"/></svg></button></div></aside>
   </div>
   <footer class="footer"><div class="hints"><span><kbd>↑</kbd><kbd>↓</kbd> 切换</span><span><kbd>1–9</kbd> 粘贴</span><span class="wheel-hint history-only">滚轮选择</span><span class="history-only"><kbd>←</kbd><kbd>→</kbd> 常用语</span><span class="phrases-only"><kbd>⌥</kbd><kbd>↑↓</kbd> 排序</span><span class="phrases-only"><kbd>←</kbd><kbd>→</kbd> 历史</span></div><div class="footer-right"><span id="destination">粘贴到原应用</span><button id="dismiss"><kbd>esc</kbd> 关闭</button></div></footer>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
@@ -116,11 +116,11 @@
   </div>
   <footer class="permission-actions"><button id="excluded-app-cancel" type="button" class="secondary" autofocus>取消</button><button id="excluded-app-confirm" type="button" class="primary">添加示例</button></footer>
 </dialog>
-<dialog id="confirm-clear" aria-labelledby="clear-title"><div class="dialog-top"><div><span class="eyebrow">清理历史</span><h2 id="clear-title">清空所有复制记录？</h2></div></div><p>此操作无法撤销。常用语和当前系统剪贴板不会被清空。</p><div class="confirm-actions"><button class="secondary close-dialog" autofocus>取消</button><button id="confirm-delete" class="danger">确认清空</button></div></dialog>
+<dialog id="confirm-clear" aria-labelledby="clear-title"><div class="dialog-top"><h2 id="clear-title">清空所有复制记录？</h2></div><p>此操作无法撤销。常用语和当前系统剪贴板不会被清空。</p><div class="confirm-actions"><button class="secondary close-dialog" autofocus>取消</button><button id="confirm-delete" class="danger">确认清空</button></div></dialog>
 <dialog id="permission-dialog" class="permission-dialog" aria-labelledby="permission-title">
   <header class="preferences-header"><h2 id="permission-title">自动粘贴</h2><button class="icon-button close-dialog" aria-label="关闭授权说明"><svg><use href="#i-close"/></svg></button></header>
   <div class="permission-content">
-    <div class="permission-intro"><span class="permission-icon"><svg><use href="#i-shield"/></svg></span><h3>允许粘贴回原来的应用</h3><p>辅助功能用于发送粘贴按键，与剪贴板记录权限独立。</p></div>
+    <div class="permission-intro"><h3><span class="permission-icon"><svg><use href="#i-shield"/></svg></span>允许粘贴回原来的应用</h3><p>辅助功能用于发送粘贴按键，与剪贴板记录权限独立。</p></div>
     <section class="settings-group" aria-labelledby="paste-permission-group"><h3 id="paste-permission-group">权限说明</h3><strong>系统设置 → 隐私与安全性 → 辅助功能</strong><p>允许 Clipnest 后，重新选择内容即可自动粘贴。未授权时，可以「这次仅复制」，再手动按 ⌘V。</p></section>
   </div>
   <footer class="permission-actions"><button class="secondary close-dialog" autofocus>取消</button><button id="permission-copy" class="secondary">这次仅复制</button><button id="permission-open" class="primary">打开系统设置…</button></footer>
@@ -128,12 +128,12 @@
 <dialog id="clipboard-dialog" class="permission-dialog" aria-labelledby="clipboard-dialog-title">
   <header class="preferences-header"><h2 id="clipboard-dialog-title">剪贴板记录</h2><button class="icon-button close-dialog" aria-label="关闭记录授权说明"><svg><use href="#i-close"/></svg></button></header>
   <div class="permission-content">
-    <div class="permission-intro"><span class="permission-icon"><svg><use href="#i-shield"/></svg></span><h3>允许 Clipnest 记录复制内容</h3><p>文字与图片仅保存在这台电脑，标记为机密的内容不会记录。</p></div>
+    <div class="permission-intro"><h3><span class="permission-icon"><svg><use href="#i-shield"/></svg></span>允许 Clipnest 记录复制内容</h3><p>文字与图片仅保存在这台电脑，标记为机密的内容不会记录。</p></div>
     <section class="settings-group" aria-labelledby="record-permission-group"><h3 id="record-permission-group">权限说明</h3><div class="setting-row"><strong>当前系统权限</strong><span id="clipboard-dialog-status"></span></div><p id="clipboard-dialog-description"></p><p>一次读取成功不代表持续授权。自动记录需将系统中的「从其他 App 粘贴」设为「允许」。</p></section>
   </div>
   <footer class="permission-actions"><button class="secondary close-dialog" autofocus>取消</button><button id="clipboard-dialog-settings" class="secondary" hidden>记录权限设置…</button><button id="clipboard-confirm" class="primary">开始记录</button></footer>
 </dialog>
-<dialog id="phrase-editor" class="phrase-editor" aria-labelledby="phrase-editor-title"><div class="dialog-top"><div><span class="eyebrow">常用语</span><h2 id="phrase-editor-title">新建常用语</h2></div></div><textarea id="phrase-text" aria-label="常用语内容" spellcheck="false" placeholder="输入或粘贴要反复使用的文字…"></textarea><p id="phrase-error" class="field-error" role="alert" hidden></p><div class="confirm-actions"><span class="editor-hint"><kbd>⌘ ↩</kbd> 保存</span><button id="phrase-cancel" class="secondary">取消</button><button id="phrase-save" class="primary">保存</button></div></dialog>
-<dialog id="confirm-discard" aria-labelledby="discard-title"><div class="dialog-top"><div><span class="eyebrow">未保存的修改</span><h2 id="discard-title">放弃修改？</h2></div></div><p>刚才输入的内容不会保存。</p><div class="confirm-actions"><button id="keep-editing" class="secondary">继续编辑</button><button id="discard-phrase" class="danger">放弃</button></div></dialog>
-<dialog id="confirm-phrase-delete" aria-labelledby="phrase-delete-title"><div class="dialog-top"><div><span class="eyebrow">删除常用语</span><h2 id="phrase-delete-title">删除这条常用语？</h2></div></div><p>删除后无法恢复，不影响剪贴板和复制历史。</p><div class="confirm-actions"><button class="secondary close-dialog">保留</button><button id="confirm-phrase-delete-button" class="danger">删除</button></div></dialog>
+<dialog id="phrase-editor" class="phrase-editor" aria-labelledby="phrase-editor-title"><div class="dialog-top"><h2 id="phrase-editor-title">新建常用语</h2></div><textarea id="phrase-text" aria-label="常用语内容" spellcheck="false" placeholder="输入或粘贴要反复使用的文字…"></textarea><p id="phrase-error" class="field-error" role="alert" hidden></p><div class="confirm-actions"><span class="editor-hint"><kbd>⌘ ↩</kbd> 保存</span><button id="phrase-cancel" class="secondary">取消</button><button id="phrase-save" class="primary">保存</button></div></dialog>
+<dialog id="confirm-discard" aria-labelledby="discard-title"><div class="dialog-top"><h2 id="discard-title">放弃修改？</h2></div><p>刚才输入的内容不会保存。</p><div class="confirm-actions"><button id="keep-editing" class="secondary">继续编辑</button><button id="discard-phrase" class="danger">放弃</button></div></dialog>
+<dialog id="confirm-phrase-delete" aria-labelledby="phrase-delete-title"><div class="dialog-top"><h2 id="phrase-delete-title">删除这条常用语？</h2></div><p>删除后无法恢复，不影响剪贴板和复制历史。</p><div class="confirm-actions"><button class="secondary close-dialog">保留</button><button id="confirm-phrase-delete-button" class="danger">删除</button></div></dialog>
 </body></html>
