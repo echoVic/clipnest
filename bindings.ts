@@ -159,6 +159,11 @@ export const Desktop = {
   openClipboardPermission(): Promise<void> {
     return call("Desktop.OpenClipboardPermission");
   },
+  /**
+   * OpenPermission opens the system settings where the user grants Accessibility.
+   * Guide waits for the user to grant it, so it runs off the main thread; the
+   * panel keeps following System Settings on its own until it is done.
+   */
   openPermission(): Promise<void> {
     return call("Desktop.OpenPermission");
   },

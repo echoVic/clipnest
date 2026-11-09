@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/plugins/permissionflow"
 	"github.com/egoist/mygo/plugins/updater"
 	"github.com/egoist/mygo/transfer"
+	"log"
 	"runtime"
 	"time"
 )
@@ -151,11 +153,28 @@ func (d *Desktop) Detail(session uint64, id string) (Entry, error) {
 	return v.Detail(id)
 }
 func (d *Desktop) Permission() (ok bool) { mygo.RunOnMain(func() { ok = d.n.Accessible() }); return }
+
+// guideAccessibility opens the Accessibility page of System Settings and
+// shows permissionflow's panel with the app to drag into the list. Tests
+// replace it so that they never touch System Settings.
+var guideAccessibility = func(ctx context.Context, options permissionflow.GuideOptions) error {
+	_, err := permissionflow.Guide(ctx, permissionflow.Accessibility, options)
+	return err
+}
+
+// OpenPermission opens the system settings where the user grants Accessibility.
+// Guide waits for the user to grant it, so it runs off the main thread; the
+// panel keeps following System Settings on its own until it is done.
 func (d *Desktop) OpenPermission() error {
 	if runtime.GOOS != "darwin" {
 		return errors.New("自动粘贴目前支持 macOS")
 	}
-	return mygo.Shell.OpenExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+	go func() {
+		if err := guideAccessibility(context.Background(), permissionflow.GuideOptions{Name: "Clipnest"}); err != nil {
+			log.Print(err)
+		}
+	}()
+	return nil
 }
 
 // CheckForUpdates opens the update window, which says when Clipnest is up to
