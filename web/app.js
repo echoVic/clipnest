@@ -1,7 +1,7 @@
 import { moveIndex, WheelSelection } from './selection.js';
 import { keyAction } from './keys.js';
 import { createDemo } from './demo.js';
-import { DetailCache, PagedList, PAGE_SIZE, virtualRange, scrollForIndex, acceptPanel, panelReadError, updateSelection, characterCount } from './responsiveness.js';
+import { DetailCache, DeferredPreview, PagedList, PAGE_SIZE, ScrollRenderQueue, virtualRange, scrollForIndex, acceptPanel, panelReadError, updateSelection, characterCount } from './responsiveness.js';
 import { looksLikeMarkdown, renderMarkdown } from './markdown.js';
 import { preferencesTabs, preferencesExclusions } from './preferences.js';
 import { imageTextPreview, imageTextSetting } from './image-text.js';
@@ -26,6 +26,7 @@ let state = { session: 0, total: 0, loading: true, paused: false, accessible: fa
 let kind = 'all', view = 'history', draft = null, reordering = false, busy = false, choosing = false, queryVersion = 0, detailVersion = 0, queryTimer, toastTimer, queryPending = false, queryScheduled = false, renderFrame;
 const wheel = new WheelSelection();
 const details = new DetailCache();
+const wheelPreview = new DeferredPreview();
 const pages = new PagedList(async (context, offset, limit) => {
   if (context.view === 'history') return call('Page', context.session, context.revision, context.q, context.kind, offset, limit);
   const phrases = await call('Phrases', context.q);
@@ -35,6 +36,15 @@ const currentEntry = () => pages.entry(pages.selected);
 const context = () => ({ session: state.session, revision: queryVersion, q: $('#search').value, kind, view });
 const blocked = () => busy || queryPending || !!pages.error || pages.retrying || (view === 'history' && state.loading);
 let rows = Object.create(null), paintedSelection = -1, paintedRange = { start: 0, end: 0, total: 0 };
+const listRange = () => {
+  const list = $('#list'), total = pages.error ? 0 : pages.total;
+  return { ...virtualRange(total, list.scrollTop, list.clientHeight || 280), total };
+};
+const listScroll = new ScrollRenderQueue({
+  requestFrame: callback => requestAnimationFrame(callback),
+  measure: listRange,
+  paint: range => renderWindow(range)
+});
 let migrating = false, migrationDismissed = false, migrationError = '', savingRetention = false, retentionDirty = false;
 const labels = { text: '文字', link: '链接', code: '代码', image: '图片' };
 const call = (method, ...args) => api.call(method, ...args);
@@ -189,6 +199,7 @@ function showView() {
 function switchView(next) { if (busy || next === view) return; view = next; showView(); refresh(); if (view === 'phrases' && draft) openEditor(); }
 function invalidateSearch(firstPage) {
   const version = ++queryVersion, next = context();
+  wheelPreview.cancel();
   queryPending = true; pages.reset(next, firstPage);
   if (state.loading || panelReadError(state)) return version;
   Promise.resolve(call('Search', next.session, next.revision)).catch(error => {
@@ -272,17 +283,16 @@ function render() {
   $('#list-order').textContent = phrases ? '按你的顺序' : '最新在前';
   emptyState(filtered);
   renderWindow();
-  updatePreview();
+  if (wheelPreview.pending) actionButtons(); else updatePreview();
   if (queryPending && !queryScheduled && !(view === 'history' && state.loading) && !error) pages.ensure(0);
 }
 function scheduleRender() {
   if (!renderFrame) renderFrame = requestAnimationFrame(() => { renderFrame = 0; render(); });
 }
 pages.onSettled = scheduleRender;
-function renderWindow() {
+function renderWindow(range = listRange()) {
   const list = $('#list'); const fragment = document.createDocumentFragment(); const phrases = view === 'phrases';
   rows = Object.create(null); paintedSelection = -1;
-  const range = virtualRange(pages.error ? 0 : pages.total, list.scrollTop, list.clientHeight || 280);
   const spacer = height => { const n = node('div', 'list-spacer'); n.style.height = `${height}px`; n.setAttribute('role', 'presentation'); return n; };
   fragment.append(spacer(range.top));
   const missing = new Set();
@@ -307,13 +317,14 @@ function renderWindow() {
       copy.append(sub);
     }
     button.append(type, copy, node('kbd', '', i < 9 ? i + 1 : ''));
-    button.addEventListener('click', () => { select(i); choose(false, { index: i, id: e.id }); });
+    button.addEventListener('click', () => { select(i, 'click'); choose(false, { index: i, id: e.id }); });
     // Deliberately no mouseenter handler: pointer hover never steals selection.
   }
   fragment.append(spacer(range.bottom));
   list.replaceChildren(fragment);
   updateSelection(rows, paintedSelection, pages.selected); paintedSelection = pages.selected;
   paintedRange = { start: range.start, end: range.end, total: pages.error ? 0 : pages.total };
+  listScroll.markPainted(paintedRange);
   const current = rows[pages.selected];
   if (current) list.setAttribute('aria-activedescendant', current.id);
   else list.removeAttribute('aria-activedescendant');
@@ -332,8 +343,8 @@ function emptyState(filtered) {
   $('#list-retry').hidden = !pages.error;
   $('#list-retry').textContent = view === 'history' && panelReadError(state) ? '关闭后重新唤起' : '重试加载';
 }
-function select(index) { if (blocked() || index === pages.selected) return; pages.select(index); selectionChanged(); }
-function selectionChanged() {
+function select(index, source = 'keyboard') { if (blocked() || index === pages.selected) return; pages.select(index); selectionChanged(source); }
+function selectionChanged(source) {
   const list = $('#list');
   const total = pages.error ? 0 : pages.total;
   list.scrollTop = scrollForIndex(pages.selected, list.scrollTop, list.clientHeight);
@@ -350,10 +361,16 @@ function selectionChanged() {
   } else {
     renderWindow();
   }
-  updatePreview();
+  if (source === 'wheel') {
+    ++detailVersion; actionButtons();
+    wheelPreview.schedule(updatePreview);
+  } else {
+    updatePreview();
+  }
 }
 function actionButtons() { $('#paste').disabled = $('#copy-only').disabled = blocked() || !currentEntry() || choosing; }
 async function updatePreview() {
+  wheelPreview.cancel();
   const version = ++detailVersion;
   const entry = blocked() ? undefined : currentEntry();
   actionButtons();
@@ -616,12 +633,13 @@ $('#reopen').onclick = async () => {
   invalidateSearch(); ++detailVersion; clearTimeout(queryTimer); queryScheduled = true;
   applyState(await call('State'), true);
 };
-$('#list').addEventListener('scroll', () => { renderWindow(); }, { passive: true });
+$('#list').addEventListener('scroll', () => { listScroll.schedule(); }, { passive: true });
 new ResizeObserver(scheduleRender).observe($('#list'));
 $('#list').addEventListener('wheel', event => {
   if (busy || event.ctrlKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
   event.preventDefault(); const step = wheel.consume(event.deltaY, event.deltaMode, performance.now());
-  if (step) { select(moveIndex(pages.selected, step, pages.total)); $('#list').focus({ preventScroll: true }); }
+  if (step) { select(moveIndex(pages.selected, step, pages.total), 'wheel'); $('#list').focus({ preventScroll: true }); }
+  if (wheelPreview.pending) wheelPreview.schedule(updatePreview);
 }, { passive: false });
 
 document.addEventListener('keydown', event => {

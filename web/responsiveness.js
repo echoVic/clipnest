@@ -37,6 +37,63 @@ export function characterCount(text) {
   return count;
 }
 
+// Coalesce scroll notifications into one frame and repaint only when the
+// visible virtual window actually changes. Scrolling inside the painted window
+// leaves the existing rows and listeners untouched.
+export class ScrollRenderQueue {
+  constructor({ requestFrame, measure, paint }) {
+    this.requestFrame = requestFrame;
+    this.measure = measure;
+    this.paint = paint;
+    this.frame = null;
+    this.painted = null;
+  }
+  schedule() {
+    if (this.frame !== null) return false;
+    this.frame = this.requestFrame(() => {
+      this.frame = null;
+      const range = this.measure();
+      if (this.painted && range.start === this.painted.start && range.end === this.painted.end && range.total === this.painted.total) return;
+      this.painted = range;
+      this.paint(range);
+    });
+    return true;
+  }
+  markPainted(range) { this.painted = range; }
+}
+
+// Wheel selection moves the highlight immediately, but the detail pane keeps
+// up with the settled entry instead of every intermediate step. A newer wheel
+// step replaces older pending work; keyboard/click selection flushes at once.
+export class DeferredPreview {
+  constructor({ setTimer = (run, delay) => setTimeout(run, delay), clearTimer = id => clearTimeout(id), delay = 180 } = {}) {
+    this.setTimer = setTimer;
+    this.clearTimer = clearTimer;
+    this.delay = delay;
+    this.timer = null;
+    this.run = null;
+    this.generation = 0;
+  }
+  get pending() { return this.run !== null; }
+  schedule(run) {
+    const generation = ++this.generation;
+    if (this.timer !== null) this.clearTimer(this.timer);
+    this.run = run;
+    this.timer = this.setTimer(() => {
+      this.timer = null;
+      const pending = this.run;
+      this.run = null;
+      if (pending && generation === this.generation) pending();
+    }, this.delay);
+  }
+  cancel() {
+    this.generation++;
+    this.run = null;
+    if (this.timer !== null) { this.clearTimer(this.timer); this.timer = null; }
+  }
+  flush(run) { this.cancel(); run(); }
+}
+
 export const ROW_HEIGHT = 70;
 export const PAGE_SIZE = 50;
 const MAX_PAGES = 8;
