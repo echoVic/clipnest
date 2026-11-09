@@ -3,6 +3,7 @@
   "slug": "clipnest",
   "identifier": "app.clipnest.desktop",
   "version": "0.1.9",
+  "license": "MIT",
   "frontendDist": "web",
   "out": "build",
   "bindings": "bindings.ts",
