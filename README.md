@@ -2,7 +2,7 @@
 
 一个键盘优先的剪贴板历史面板，支持 macOS 和 Windows。正常复制，随时找回；用数字、方向键、滚轮选择，确认后回到原应用粘贴。
 
-当前分支为 **0.1.9 开发版**，新增 Windows 支持（文字与图片记录、面板、自动粘贴、NSIS 安装器，暂未签名）；最新正式版为 **0.1.8**。按应用排除记录、剪贴板记录权限、分组原生设置、SQLite 存储、历史保留策略、虚拟列表和搜索优化继续保留。正式版下载见 [GitHub Releases](https://github.com/echoVic/clipnest/releases)，改动记录见 [CHANGELOG](CHANGELOG.md)。
+当前正式版为 **0.1.10**，修复 macOS 面板滚动卡顿：虚拟列表滚动重绘合并到单个动画帧，滚轮切换时延迟右侧预览。0.1.9 起新增 Windows 支持（文字与图片记录、面板、自动粘贴、NSIS 安装器，暂未签名）。按应用排除记录、剪贴板记录权限、分组原生设置、SQLite 存储、历史保留策略、虚拟列表和搜索优化继续保留。正式版下载见 [GitHub Releases](https://github.com/echoVic/clipnest/releases)，改动记录见 [CHANGELOG](CHANGELOG.md)。
 
 ## 使用
 
