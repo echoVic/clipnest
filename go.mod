@@ -6,7 +6,7 @@ tool github.com/egoist/mygo/cmd/mygo
 
 require (
 	github.com/ebitengine/purego v0.11.1
-	github.com/egoist/mygo v0.7.1
+	github.com/egoist/mygo v0.8.3
 	modernc.org/sqlite v1.61.0
 )
 
