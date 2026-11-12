@@ -2,7 +2,7 @@
 
 一个键盘优先的剪贴板历史面板，支持 macOS 和 Windows。正常复制，随时找回；用数字、方向键、滚轮选择，确认后回到原应用粘贴。
 
-当前正式版为 **0.1.11**，预览中的 Markdown 图片改为链接、不再加载远程地址，Linux 键位提示与 Windows 一致，保存与清理失败提示在操作恢复后自动消失，内容损坏的历史条目也能删除。0.1.9 起新增 Windows 支持（文字与图片记录、面板、自动粘贴、NSIS 安装器，暂未签名）。按应用排除记录、剪贴板记录权限、分组原生设置、SQLite 存储、历史保留策略、虚拟列表和搜索优化继续保留。正式版下载见 [GitHub Releases](https://github.com/echoVic/clipnest/releases)，改动记录见 [CHANGELOG](CHANGELOG.md)。
+当前正式版为 **0.1.12**，偏好设置新增可自定义的唤起快捷键：点击后按下包含修饰键的组合即可更换，Esc 取消，也可以恢复默认；被占用或保存失败时保留原设置。0.1.9 起新增 Windows 支持（文字与图片记录、面板、自动粘贴、NSIS 安装器，暂未签名）。按应用排除记录、剪贴板记录权限、分组原生设置、SQLite 存储、历史保留策略、虚拟列表和搜索优化继续保留。正式版下载见 [GitHub Releases](https://github.com/echoVic/clipnest/releases)，改动记录见 [CHANGELOG](CHANGELOG.md)。
 
 ## 使用
 
