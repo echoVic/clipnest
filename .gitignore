@@ -1,7 +1,15 @@
 /build/
 /.mygo/
 /clipnest
+/clipnest.exe
 /flux/.local/
 *.test
 .DS_Store
 /log/
+# Local tool output and working material, never part of the project.
+/.artifacts/
+/.creative-design/
+/.screenshots/
+/.trae-html-share-packages/
+/.wrangler/
+/*.patch
