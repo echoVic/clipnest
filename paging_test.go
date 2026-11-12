@@ -388,3 +388,64 @@ func TestSQLiteWritersDoNotInvalidateEachOthersSnapshot(t *testing.T) {
 		}
 	}
 }
+
+func TestViewContainsChecksTheSnapshotWithoutReadingPayloads(t *testing.T) {
+	for _, backend := range []string{"sqlite", "json"} {
+		t.Run(backend, func(t *testing.T) {
+			var h *History
+			if backend == "sqlite" {
+				s, err := openStorage(t.TempDir())
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = s.Close() })
+				h = s.History
+			} else {
+				var err error
+				if h, err = openHistory(filepath.Join(t.TempDir(), "history.json")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			kept, removed, broken := entry(t, "kept"), entry(t, "removed"), entry(t, "broken")
+			for _, e := range []Entry{kept, removed, broken} {
+				h.Add(e)
+			}
+			if err := h.Save(); err != nil {
+				t.Fatal(err)
+			}
+			if h.db != nil {
+				// Detail rejects this payload; Contains must not look at it.
+				if _, err := h.db.db.Exec("UPDATE history_content SET text='corrupted' WHERE id=?", broken.ID); err != nil {
+					t.Fatal(err)
+				}
+			}
+			v, err := h.OpenView()
+			if err != nil {
+				t.Fatal(err)
+			}
+			h.Remove(removed.ID)
+			added := entry(t, "added later")
+			h.Add(added)
+			if err := h.Save(); err != nil {
+				t.Fatal(err)
+			}
+			for _, id := range []string{kept.ID, removed.ID, broken.ID} {
+				if err := v.Contains(id); err != nil {
+					t.Fatalf("Contains(%q) = %v, want the snapshot's entry", id, err)
+				}
+			}
+			if h.db != nil {
+				if _, err := v.Detail(broken.ID); err == nil {
+					t.Fatal("corrupted payload was readable, the check above proves nothing")
+				}
+			}
+			if err := v.Contains(added.ID); err == nil || err.Error() != "这条内容已移除" {
+				t.Fatalf("Contains(new entry) = %v", err)
+			}
+			v.Close()
+			if err := v.Contains(kept.ID); err == nil || err.Error() != "面板已关闭，请重新打开" {
+				t.Fatalf("Contains after Close = %v", err)
+			}
+		})
+	}
+}

@@ -197,7 +197,12 @@ func (d *Desktop) Pause(paused bool) (s PanelState, err error) {
 	return
 }
 func (d *Desktop) Delete(session uint64, id string) (s PanelState, err error) {
-	if _, err := d.Detail(session, id); err != nil {
+	var v *historyView
+	mygo.RunOnMain(func() { v, err = d.panelView(session) })
+	if err == nil {
+		err = v.Contains(id)
+	}
+	if err != nil {
 		return s, err
 	}
 	return d.changeHistory(session, func() error {

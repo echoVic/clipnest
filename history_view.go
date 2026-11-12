@@ -174,6 +174,30 @@ func (v *historyView) page(ctx context.Context, q, kind string, offset, limit in
 	return page, rows.Err()
 }
 
+// Contains fails as Detail would when id is not in the panel's snapshot, but
+// reads no payload: an image can be 8 MiB, and deleting it needs none of it.
+func (v *historyView) Contains(id string) error {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if v.closed || v.ctx.Err() != nil {
+		return errors.New("面板已关闭，请重新打开")
+	}
+	if v.tx == nil {
+		for _, e := range v.legacy {
+			if e.ID == id {
+				return nil
+			}
+		}
+		return errors.New("这条内容已移除")
+	}
+	var found int
+	err := v.tx.QueryRowContext(v.ctx, "SELECT 1 FROM history WHERE id=?", id).Scan(&found)
+	if errors.Is(err, sql.ErrNoRows) {
+		return errors.New("这条内容已移除")
+	}
+	return err
+}
+
 func (v *historyView) Detail(id string) (Entry, error) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
