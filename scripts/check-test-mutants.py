@@ -17,7 +17,8 @@ for name, filename, old, new, command in cases:
     with tempfile.TemporaryDirectory(prefix='clipnest-mutant-') as temp:
         target = pathlib.Path(temp)
         for path in root.glob('*.go'): shutil.copy2(path, target/path.name)
-        for filename2 in ('go.mod','go.sum'): shutil.copy2(root/filename2,target/filename2)
+        # app_info.go embeds mygo.json; without it every Go mutant fails to build.
+        for filename2 in ('go.mod','go.sum','mygo.json'): shutil.copy2(root/filename2,target/filename2)
         shutil.copytree(root/'web',target/'web')
         path=target/filename
         text=path.read_text()

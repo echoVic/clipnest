@@ -15,7 +15,8 @@ output.mkdir(parents=True,exist_ok=False)
 source=output/'source';source.mkdir()
 for path in root.glob('*.go'):
     if not path.name.endswith('_test.go'):shutil.copy2(path,source/path.name)
-for name in ('go.mod','go.sum'):shutil.copy2(root/name,source/name)
+# app_info.go embeds mygo.json.
+for name in ('go.mod','go.sum','mygo.json'):shutil.copy2(root/name,source/name)
 shutil.copytree(root/'web',source/'web')
 data=output/'data';data.mkdir()
 records=output/'native-samples.jsonl'
@@ -94,7 +95,9 @@ const paintAck = label => requestAnimationFrame(()=>requestAnimationFrame(()=>{
  if(probeInputAt) {report(label,performance.now()-probeInputAt);probeInputAt=0;}
 }));''')
 app=app.replace("requestAnimationFrame(() => $('#list').focus({ preventScroll: true }));","requestAnimationFrame(()=>requestAnimationFrame(()=>window.mygo.call('ResponseProbe.OpenPaint').catch(()=>{}))); requestAnimationFrame(() => $('#list').focus({ preventScroll: true }));")
-app=app.replace('renderWindow();\n  updatePreview();','renderWindow();\n  updatePreview(); paintAck("input_to_list_paint_opportunity");')
+app=app.replace('renderWindow();\n  if (wheelPreview.pending) actionButtons(); else updatePreview();','renderWindow();\n  if (wheelPreview.pending) actionButtons(); else updatePreview(); paintAck("input_to_list_paint_opportunity");')
+# A renamed anchor would otherwise drop the list samples without any error.
+assert 'input_to_list_paint_opportunity' in app, 'diagnostic app.js lost the list paint probe'
 app=app.replace("$('#preview-meta').replaceChildren(info, remove);","$('#preview-meta').replaceChildren(info, remove); paintAck('input_to_detail_paint_opportunity');")
 app=app.replace("$('#preview-meta').replaceChildren(node('span', '', `${characterCount(p.text)} 个字符`), actions);","$('#preview-meta').replaceChildren(node('span', '', `${characterCount(p.text)} 个字符`), actions); paintAck('input_to_phrase_paint_opportunity');")
 (source/'web/app.js').write_text(app)
