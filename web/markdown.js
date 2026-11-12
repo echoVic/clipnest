@@ -31,6 +31,15 @@ function safeUrl(url) {
   return '';
 }
 
+function link(href, text) {
+  const a = document.createElement('a');
+  a.href = href;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  a.textContent = text;
+  return a;
+}
+
 // Inline formatter: returns a DocumentFragment with styled nodes.
 // Processes: code spans, images, links, bold, italic, strikethrough.
 function renderInline(text, out) {
@@ -54,20 +63,14 @@ function renderInline(text, out) {
       }
     }
 
-    // Image: ![alt](url)
+    // Image: ![alt](url). Previewing a clipboard entry must never make a
+    // network request, so the image becomes a link to its address instead.
     if (ch === '!' && text[i + 1] === '[') {
       const m = /^!\[([^\]]*)\]\(([^)]+)\)/.exec(text.slice(i));
       if (m) {
         flush();
-        const src = safeUrl(m[2]);
-        if (src) {
-          const img = document.createElement('img');
-          img.alt = m[1];
-          img.src = src;
-          out.append(img);
-        } else {
-          out.append(document.createTextNode(m[1]));
-        }
+        const href = safeUrl(m[2]);
+        out.append(href ? link(href, m[1] || href) : document.createTextNode(m[1]));
         i += m[0].length;
         continue;
       }
@@ -79,16 +82,7 @@ function renderInline(text, out) {
       if (m) {
         flush();
         const href = safeUrl(m[2]);
-        if (href) {
-          const a = document.createElement('a');
-          a.href = href;
-          a.target = '_blank';
-          a.rel = 'noopener noreferrer';
-          a.textContent = m[1];
-          out.append(a);
-        } else {
-          out.append(document.createTextNode(m[1]));
-        }
+        out.append(href ? link(href, m[1]) : document.createTextNode(m[1]));
         i += m[0].length;
         continue;
       }

@@ -41,3 +41,17 @@ test('supported blocks render without treating raw HTML as markup', () => {
     assert.equal(out.children[2].children[0].textContent, 'const x = 1');
   } finally { globalThis.document = old; }
 });
+
+test('images never load: a safe address becomes a link, anything else stays text', () => {
+  const old = globalThis.document;
+  const created = [];
+  globalThis.document = { ...documentStub(), createElement: tag => { created.push(tag); return new Element(tag); } };
+  try {
+    const out = renderMarkdown('![chart](https://example.com/a.png)|![](https://example.com/b.png)|![x](javascript:void)');
+    assert.ok(!created.includes('img'));
+    const [alt, , bare, , unsafe] = out.children[0].children;
+    assert.deepEqual([alt.tag, alt.href, alt.textContent, alt.target, alt.rel], ['a', 'https://example.com/a.png', 'chart', '_blank', 'noopener noreferrer']);
+    assert.deepEqual([bare.tag, bare.href, bare.textContent], ['a', 'https://example.com/b.png', 'https://example.com/b.png']);
+    assert.deepEqual([unsafe.tag, unsafe.textContent], [undefined, 'x']);
+  } finally { globalThis.document = old; }
+});
