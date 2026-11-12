@@ -16,6 +16,7 @@ type PreferencesState struct {
 	Accessible      bool             `json:"accessible"`
 	ClipboardAccess ClipboardAccess  `json:"clipboardAccess"`
 	Shortcut        string           `json:"shortcut"`
+	ShortcutNotice  string           `json:"shortcutNotice"`
 	Storage         StorageStatus    `json:"storage"`
 	Platform        string           `json:"platform"`
 	Version         string           `json:"version"`
@@ -55,6 +56,51 @@ func (d *Desktop) SetAppearance(source mygo.ThemeSource) error {
 	return nil
 }
 
+// Called by the native preferences worker: keep registration and Desktop
+// fields on main, and the atomic settings write off the UI thread.
+func (d *Desktop) setShortcut(accelerator string) error {
+	binding, err := parseShortcutBinding(runtime.GOOS, accelerator)
+	if err != nil {
+		return err
+	}
+	var previous string
+	started := false
+	mygo.RunOnMain(func() {
+		if !d.busy && !d.quitting {
+			d.busy, started = true, true
+			previous = d.shortcutAccelerator
+		}
+	})
+	if !started {
+		return errors.New("正在处理其他操作，请稍后再试")
+	}
+	committed, err := replaceShortcut(previous, binding.Accelerator, d.shortcutPath, d.shortcutPressed, shortcutOps{
+		register: func(acc string, show func()) (err error) {
+			mygo.RunOnMain(func() { err = mygo.GlobalShortcut.Register(acc, show) })
+			return
+		},
+		unregister: func(acc string) { mygo.RunOnMain(func() { mygo.GlobalShortcut.Unregister(acc) }) },
+		save:       saveShortcutConfig,
+	})
+	mygo.RunOnMain(func() {
+		d.busy = false
+		if committed {
+			if d.notice == d.shortcutNotice {
+				d.notice = ""
+			}
+			d.shortcut, d.shortcutAccelerator = binding.Label, binding.Accelerator
+			d.shortcutNotice = ""
+			if err != nil {
+				d.shortcutNotice = err.Error()
+			}
+			if d.win != nil && d.win.IsVisible() {
+				_ = panelChanged.Broadcast(d.snapshot())
+			}
+		}
+	})
+	return err
+}
+
 func (d *Desktop) setAppearance(source mygo.ThemeSource) {
 	d.appearanceInitialized = true
 	mygo.Theme.SetSource(source)
@@ -69,7 +115,8 @@ func (d *Desktop) preferencesState() PreferencesState {
 	return PreferencesState{
 		Appearance: mygo.Theme.Source(), Paused: d.h.IsPaused(), Accessible: d.n.Accessible(),
 		ClipboardAccess: d.clipboardAccess, Shortcut: d.shortcut, Storage: d.StorageStatus(),
-		Platform: runtime.GOOS, Version: applicationVersion(), ExcludedApps: d.ExcludedApps(),
+		ShortcutNotice: d.shortcutNotice,
+		Platform:       runtime.GOOS, Version: applicationVersion(), ExcludedApps: d.ExcludedApps(),
 	}
 }
 
@@ -96,6 +143,9 @@ func newPreferencesWindow(d *Desktop) *preferencesWindow {
 	p := &preferencesWindow{desktop: d, view: &preferencesView{}}
 	v := p.view
 	v.actions = preferencesActions{
+		shortcut: func(accelerator string) {
+			p.run(func() error { return d.setShortcut(accelerator) }, "快捷键已更新", false)
+		},
 		appearance: func(source mygo.ThemeSource) {
 			if err := d.SetAppearance(source); err != nil {
 				v.notice, v.failed = err.Error(), true
@@ -134,6 +184,7 @@ func newPreferencesWindow(d *Desktop) *preferencesWindow {
 		update: d.CheckForUpdates,
 		close: func() {
 			if !v.busy {
+				v.recordingShortcut = false
 				p.win.Hide()
 			}
 		},
@@ -143,7 +194,15 @@ func newPreferencesWindow(d *Desktop) *preferencesWindow {
 		MinWidth: 520, MinHeight: 480, Hidden: true,
 		TitleBarStyle: mygo.TitleBarHidden, Content: ui.View(v.draw),
 	})
+	// Menu accelerators run before HandleInput. The preferences are all
+	// native controls, so let the recorder receive Cmd+Q/Cmd+W as keys.
+	p.win.SetMenu(mygo.NewMenu(nil))
 	p.win.OnFocus(p.refresh)
+	p.win.OnBlur(func() {
+		v.recordingShortcut = false
+		p.win.Invalidate()
+	})
+	p.win.OnHide(func() { v.recordingShortcut = false })
 	p.win.OnClose(func(e *mygo.CloseEvent) {
 		if !d.quitting {
 			e.PreventDefault()

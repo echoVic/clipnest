@@ -79,7 +79,14 @@ func main() {
 		}
 	}()
 	h := store.History
-	d := &Desktop{h: h, p: store.Phrases, storage: store, lastRevision: -2, stop: make(chan struct{}), shortcut: "⌘ ⇧ V"}
+	shortcutPath := filepath.Join(dir, "shortcut.json")
+	shortcutAccelerator, shortcutErr := loadShortcutConfig(shortcutPath)
+	d := &Desktop{h: h, p: store.Phrases, storage: store, lastRevision: -2, stop: make(chan struct{}),
+		shortcutPath: shortcutPath, shortcutAccelerator: shortcutAccelerator}
+	if shortcutErr != nil {
+		log.Print("快捷键配置读取失败：", shortcutErr)
+		d.shortcutNotice = "快捷键配置无法读取，已尝试默认快捷键；可在偏好设置中重新录入"
+	}
 	mygo.Use(updater.New(updater.Options{Interval: 4 * time.Hour}))
 	mygo.SetFrontend(web)
 	mygo.Bind(d)

@@ -62,6 +62,9 @@ type Desktop struct {
 	appearanceInitialized bool
 	notice                string
 	shortcut              string
+	shortcutAccelerator   string
+	shortcutPath          string
+	shortcutNotice        string
 	busy                  bool
 	quitting              bool
 	stop                  chan struct{}

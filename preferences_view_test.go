@@ -132,3 +132,84 @@ func TestPreferencesRetainsVersionAndUpdateAction(t *testing.T) {
 		t.Fatal("settings lost the update action")
 	}
 }
+
+func TestPreferencesShortcutRecordingAndCancel(t *testing.T) {
+	v := settingsView()
+	var saved string
+	closed := 0
+	v.actions.shortcut = func(acc string) { saved = acc }
+	v.actions.close = func() { closed++ }
+	tt := ui.NewTester(v.draw, 620, 580)
+	if err := tt.Click("修改唤起快捷键"); err != nil {
+		t.Fatal(err)
+	}
+	if !tt.HasText("按下快捷键…") {
+		t.Fatal("recording prompt missing", tt.Texts())
+	}
+	tt.Key(0, ui.KeyK)
+	if saved != "" || !v.recordingShortcut {
+		t.Fatal("bare key was saved")
+	}
+	tt.Key(ui.Cmd|ui.Shift, ui.KeyK)
+	if saved != "Command+Shift+K" || v.recordingShortcut {
+		t.Fatal("shortcut not submitted", saved)
+	}
+	v.state.Shortcut = "⌘ ⇧ K"
+	tt.Frame()
+	if !tt.HasText("⌘ ⇧ K") {
+		t.Fatal("updated shortcut missing")
+	}
+	tt.Click("修改唤起快捷键")
+	tt.Key(0, ui.KeyEscape)
+	if v.recordingShortcut || closed != 0 {
+		t.Fatal("Escape closed settings instead of canceling")
+	}
+	tt.Key(0, ui.KeyEscape)
+	if closed != 1 {
+		t.Fatal("Escape no longer closes idle settings")
+	}
+}
+
+func TestPreferencesShortcutCanRecordWindowCloseChordAndReset(t *testing.T) {
+	v := settingsView()
+	var saved string
+	closed := 0
+	v.actions.shortcut = func(acc string) { saved = acc }
+	v.actions.close = func() { closed++ }
+	tt := ui.NewTester(v.draw, 620, 580)
+	tt.Click("修改唤起快捷键")
+	tt.Key(ui.Cmd, ui.KeyW)
+	if saved != "Command+W" || closed != 0 {
+		t.Fatalf("saved=%q closed=%d", saved, closed)
+	}
+	tt.Click("恢复默认")
+	if saved != shortcutChoicesFor("darwin")[0].accelerator {
+		t.Fatal("reset did not select platform default", saved)
+	}
+}
+
+func TestPreferencesShortcutRecordingEndsWhenFocusLeaves(t *testing.T) {
+	v := settingsView()
+	v.actions.shortcut = func(string) { t.Fatal("saved after recording lost focus") }
+	tt := ui.NewTester(v.draw, 620, 580)
+	tt.Click("修改唤起快捷键")
+	tt.Click("隐私")
+	tt.Key(ui.Cmd|ui.Shift, ui.KeyK)
+	tt.Click("通用")
+	if v.recordingShortcut || tt.HasText("按下快捷键…") {
+		t.Fatal("recording survived tab change")
+	}
+}
+
+func TestPreferencesShortcutRecordingExistingHotkey(t *testing.T) {
+	v := settingsView()
+	var saved string
+	v.actions.shortcut = func(acc string) { saved = acc }
+	tt := ui.NewTester(v.draw, 620, 580)
+	tt.Click("修改唤起快捷键")
+	v.submitShortcut("Command+Shift+V")
+	tt.Frame()
+	if saved != "Command+Shift+V" || v.recordingShortcut {
+		t.Fatal("existing global shortcut did not finish recording", saved)
+	}
+}

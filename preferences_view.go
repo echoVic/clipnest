@@ -9,6 +9,7 @@ import (
 )
 
 type preferencesActions struct {
+	shortcut          func(string)
 	appearance        func(mygo.ThemeSource)
 	pause             func(bool)
 	request           func()
@@ -25,16 +26,17 @@ type preferencesActions struct {
 }
 
 type preferencesView struct {
-	state          PreferencesState
-	actions        preferencesActions
-	tab            int
-	busy           bool
-	notice         string
-	failed         bool
-	maxMiB         float64
-	keepDays       float64
-	retentionDirty bool
-	confirmClear   bool
+	state             PreferencesState
+	actions           preferencesActions
+	tab               int
+	recordingShortcut bool
+	busy              bool
+	notice            string
+	failed            bool
+	maxMiB            float64
+	keepDays          float64
+	retentionDirty    bool
+	confirmClear      bool
 }
 
 func (v *preferencesView) setState(s PreferencesState) {
@@ -65,7 +67,10 @@ func preferencesTheme(c *ui.Context) ui.Theme {
 
 func (v *preferencesView) draw(c *ui.Context) {
 	theme := preferencesTheme(c)
-	if !v.confirmClear && !v.busy && (c.Shortcut(0, ui.KeyEscape) || c.Shortcut(ui.Cmd, ui.KeyW)) && v.actions.close != nil {
+	if v.tab != 0 {
+		v.recordingShortcut = false
+	}
+	if !v.recordingShortcut && !v.confirmClear && !v.busy && (c.Shortcut(0, ui.KeyEscape) || c.Shortcut(ui.Cmd, ui.KeyW)) && v.actions.close != nil {
 		v.actions.close()
 	}
 	ui.Column(c).Fill().Children(func() {
@@ -145,7 +150,34 @@ func (v *preferencesView) general(c *ui.Context) {
 			}
 		})
 		ui.Row(c).FillWidth().Height(1).Background(c.Theme().Border)
-		v.row(c, "唤起面板", "方向键或数字选择，Enter 粘贴。", func() { ui.Text(c, v.state.Shortcut).Bold() })
+		v.row(c, "唤起面板", "点击快捷键修改。方向键或数字选择，Enter 粘贴。", func() {
+			ui.Column(c).AlignItems(ui.End).Gap(6).Children(func() {
+				label := v.state.Shortcut
+				if v.recordingShortcut {
+					label = "按下快捷键…"
+				}
+				button := ui.Button(c, label).Key("shortcut-recorder").Label("修改唤起快捷键").
+					Disabled(v.actions.shortcut == nil).HandleInput(v.shortcutInput)
+				if v.recordingShortcut {
+					button.Border(1, c.Theme().Accent)
+					if button.FocusLeft() {
+						v.recordingShortcut = false
+					}
+				}
+				if button.Clicked() {
+					v.recordingShortcut = !v.recordingShortcut
+					v.notice, v.failed = "", false
+				}
+				if v.recordingShortcut {
+					ui.Text(c, "包含修饰键，Esc 取消").FontSize(12).TextColor(c.Theme().TextMuted)
+				} else if ui.Button(c, "恢复默认").Disabled(v.actions.shortcut == nil).Clicked() {
+					v.actions.shortcut(shortcutChoicesFor(v.state.Platform)[0].accelerator)
+				}
+			})
+		})
+		if v.state.ShortcutNotice != "" {
+			ui.Text(c, v.state.ShortcutNotice).FontSize(12).TextColor(c.Theme().Danger)
+		}
 	})
 	v.group(c, "版本与反馈", func() {
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(16).Children(func() {
@@ -163,6 +195,46 @@ func (v *preferencesView) general(c *ui.Context) {
 			ui.Link(c, "发送反馈…", "https://github.com/echoVic/clipnest/issues/new")
 		})
 	})
+}
+
+func (v *preferencesView) shortcutInput(ev ui.InputEvent) bool {
+	if !v.recordingShortcut || v.busy {
+		return false
+	}
+	switch ev.Kind {
+	case ui.InputKeyDown:
+		if ev.Repeat {
+			return true
+		}
+		if ev.Key == ui.KeyEscape {
+			v.recordingShortcut = false
+			v.notice, v.failed = "", false
+			return true
+		}
+		binding, ok := shortcutBindingFromEvent(v.state.Platform, ev.Mods, ev.Key, ev.PhysicalKey)
+		if !ok {
+			if ev.Key != ui.KeyUnknown || ev.PhysicalKey != ui.KeyUnknown {
+				v.notice, v.failed = "请按下修饰键加另一个键，例如 Ctrl Alt K", true
+			}
+			return true
+		}
+		v.submitShortcut(binding.Accelerator)
+		return true
+	case ui.InputKeyUp, ui.InputText, ui.InputCompose, ui.InputCommand:
+		return true
+	}
+	return false
+}
+
+func (v *preferencesView) submitShortcut(accelerator string) {
+	if !v.recordingShortcut || v.busy {
+		return
+	}
+	v.recordingShortcut = false
+	v.notice, v.failed = "", false
+	if v.actions.shortcut != nil {
+		v.actions.shortcut(accelerator)
+	}
 }
 
 func (v *preferencesView) privacy(c *ui.Context) {

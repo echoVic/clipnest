@@ -205,14 +205,39 @@ func shortcutChoicesFor(goos string) []shortcutChoice {
 
 func (d *Desktop) registerShortcuts() {
 	choices := shortcutChoicesFor(runtime.GOOS)
-	d.shortcut = choices[0].label
-	if err := mygo.GlobalShortcut.Register(choices[0].accelerator, d.show); err != nil {
-		d.shortcut = choices[1].label
-		if err := mygo.GlobalShortcut.Register(choices[1].accelerator, d.show); err != nil {
-			d.shortcut = "菜单栏打开"
-			d.notice = "快捷键已被占用，请从菜单栏打开"
-		} else {
-			d.notice = choices[0].label + " 已被占用，已改用 " + choices[1].label
+	if d.shortcutAccelerator != "" {
+		if saved, err := parseShortcutBinding(runtime.GOOS, d.shortcutAccelerator); err == nil {
+			choices = append([]shortcutChoice{{saved.Accelerator, saved.Label}}, choices...)
 		}
 	}
+	d.shortcutAccelerator = ""
+	seen := make(map[string]bool)
+	for _, choice := range choices {
+		binding, err := parseShortcutBinding(runtime.GOOS, choice.accelerator)
+		if err != nil || seen[binding.Accelerator] {
+			continue
+		}
+		seen[binding.Accelerator] = true
+		if err := mygo.GlobalShortcut.Register(binding.Accelerator, d.shortcutPressed); err != nil {
+			continue
+		}
+		d.shortcut, d.shortcutAccelerator = binding.Label, binding.Accelerator
+		if len(seen) > 1 {
+			d.shortcutNotice = "首选快捷键被占用或系统不支持，已改用 " + binding.Label + "；可在偏好设置中修改"
+		}
+		d.notice = d.shortcutNotice
+		return
+	}
+	d.shortcut = "菜单栏打开"
+	d.shortcutNotice = "快捷键无法注册，请从菜单栏打开，并在偏好设置中换一个组合"
+	d.notice = d.shortcutNotice
+}
+
+func (d *Desktop) shortcutPressed() {
+	if d.preferences != nil && d.preferences.view.recordingShortcut && d.preferences.win.IsVisible() {
+		d.preferences.view.submitShortcut(d.shortcutAccelerator)
+		d.preferences.win.Invalidate()
+		return
+	}
+	d.show()
 }
