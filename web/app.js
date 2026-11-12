@@ -74,7 +74,6 @@ function header() {
   $('#count').textContent = state.total;
   const pastePlatform = state.platform === 'darwin' || state.platform === 'windows';
   $('#permission-status').textContent = demo ? '演示模式，桌面版可粘贴到原应用。' : !pastePlatform ? '此系统使用「仅复制」，自动粘贴支持 macOS 与 Windows。' : state.accessible ? '已允许，选完即可粘贴到原应用。' : '允许辅助功能，选完直接粘贴。';
-  $('#permission').hidden = demo || !pastePlatform || state.accessible;
   clipboardPrompt();
   storagePrompt();
   imageTextPrompt();
@@ -207,11 +206,12 @@ function invalidateSearch(firstPage) {
   });
   return version;
 }
-// Static hint markup uses macOS glyphs; on Windows the same shortcuts use
-// Ctrl/Alt, so rewrite them once the platform is known.
+// Static hint markup uses macOS glyphs; on Windows and Linux the same
+// shortcuts use Ctrl/Alt, so rewrite them once the platform is known.
+const ctrlPlatform = () => state.platform === 'windows' || state.platform === 'linux';
 let platformHintsApplied = false;
 function adaptPlatformHints() {
-  if (platformHintsApplied || state.platform !== 'windows') return;
+  if (platformHintsApplied || !ctrlPlatform()) return;
   platformHintsApplied = true;
   const glyphs = { '⌘': 'Ctrl', '⌥': 'Alt', '⇧': 'Shift' };
   const map = text => text.replace(/[⌘⌥⇧]/g, ch => ` ${glyphs[ch]} `).replace(/\s+/g, ' ').trim();
@@ -451,7 +451,7 @@ async function phrasePreview(entry, version) {
       $('#preview-body').replaceChildren(node('p', 'preview-text', p.text));
     }
     $('#preview-body').scrollTop = 0;
-    const edit = node('button', 'icon-button edit-phrase'); edit.title = state.platform === 'windows' ? '编辑（Ctrl E）' : '编辑（⌘E）'; edit.setAttribute('aria-label', '编辑这条常用语'); edit.append(icon('edit')); edit.onclick = editPhrase;
+    const edit = node('button', 'icon-button edit-phrase'); edit.title = ctrlPlatform() ? '编辑（Ctrl E）' : '编辑（⌘E）'; edit.setAttribute('aria-label', '编辑这条常用语'); edit.append(icon('edit')); edit.onclick = editPhrase;
     const remove = node('button', 'icon-button delete-entry'); remove.title = '删除这条常用语'; remove.setAttribute('aria-label', '删除这条常用语'); remove.append(icon('trash')); remove.onclick = askDeletePhrase;
     const actions = node('span', 'meta-actions'); actions.append(edit, remove);
     $('#preview-meta').replaceChildren(node('span', '', `${characterCount(p.text)} 个字符`), actions);
@@ -622,12 +622,11 @@ $('#confirm-delete').onclick = async () => {
   catch (e) { toast(message(e)); }
   finally { busy = false; render(); }
 };
-const openPermission = async () => { try { await call('OpenPermission'); } catch (e) { toast(message(e)); } };
-$('#permission').onclick = $('#permission-open').onclick = openPermission;
-// The demo keeps the desktop setting visible without checking for updates.
+$('#permission-open').onclick = async () => { try { await call('OpenPermission'); } catch (e) { toast(message(e)); } };
+// Only the demo shows this dialog; the desktop checks for updates from the
+// native preferences window. The entry stays visible but disabled.
 $('#check-update').disabled = demo;
 $('#check-update').title = demo ? '浏览器演示；桌面版可检查更新' : '检查新版本';
-$('#check-update').onclick = () => { if (!demo) api.call('CheckForUpdates').catch(() => {}); };
 $('#permission-copy').onclick = () => { $('#permission-dialog').close(); choose(true); };
 $('#reopen').onclick = async () => {
   invalidateSearch(); ++detailVersion; clearTimeout(queryTimer); queryScheduled = true;

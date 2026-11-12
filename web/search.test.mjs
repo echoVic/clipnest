@@ -205,7 +205,7 @@ test('clipboard permission is separate from Accessibility and never requested on
   assert.equal(ui.get('#clipboard-settings').hidden, false);
   assert.match(ui.get('#clipboard-status').textContent, /询问/);
   assert.match(ui.get('#status').children[1], /等待授权/);
-  assert.equal(ui.get('#permission').hidden, true);
+  assert.equal(ui.get('#permission-status').textContent, '已允许，选完即可粘贴到原应用。');
   assert.equal(ui.get('#copy-only').disabled, false);
   assert.ok(!ui.calls.some(c => c.method === 'RequestClipboardPermission'));
   await ui.get('#settings').onclick();
@@ -241,7 +241,7 @@ test('permission request failure refreshes status and restores the controls', as
   assert.equal(ui.get('#clipboard-request').disabled, false);
   assert.equal(ui.get('#clipboard-request').hidden, true);
   assert.match(ui.get('#clipboard-status').textContent, /拒绝/);
-  assert.equal(ui.get('#permission').hidden, false);
+  assert.equal(ui.get('#permission-status').textContent, '允许辅助功能，选完直接粘贴。');
   assert.equal(ui.get('#copy-only').disabled, false);
   assert.equal(ui.get('#toast').textContent, '读取未获允许');
 });
@@ -326,10 +326,19 @@ test('native permission Settings opens Accessibility without requesting recordin
   assert.ok(!ui.calls.some(c => c.method === 'Choose' || c.method === 'RequestClipboardPermission'));
 });
 
-test('settings retain the version and a working desktop update entry', async t => {
+test('settings retain the version and leave update checks to the native preferences window', async t => {
   const ui = await app(t);
   assert.equal(ui.get('#app-version').textContent, 'Clipnest 0.1.5');
-  assert.equal(ui.get('#check-update').disabled, false);
-  ui.get('#check-update').onclick();
-  assert.ok(ui.calls.some(c => c.method === 'CheckForUpdates'));
+  assert.equal(ui.get('#check-update').onclick, undefined);
+  await ui.get('#settings').onclick();
+  assert.ok(!ui.calls.some(c => c.method === 'CheckForUpdates'));
+});
+
+test('Windows and Linux hints use Ctrl while macOS and the demo keep the glyphs', async t => {
+  for (const [platform, ctrl] of [['windows', true], ['linux', true], ['darwin', false], ['demo', false]]) {
+    const ui = await app(t, { platform, shortcut: ctrl ? 'Ctrl Shift V' : '⌘ ⇧ V' });
+    assert.equal(ui.get('#empty p strong').textContent, ctrl ? 'Ctrl Shift V' : '', platform);
+    ui.views[1].onclick(); await ui.settle();
+    assert.equal(ui.get('#preview-meta').children[1].children[0].title, ctrl ? '编辑（Ctrl E）' : '编辑（⌘E）', platform);
+  }
 });
