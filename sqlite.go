@@ -150,7 +150,6 @@ func (s *sqliteStore) transaction(run func(*sql.Tx) error) error {
 
 func (s *sqliteStore) load() (archive, []Phrase, error) {
 	a := archive{Version: 1, Entries: []Entry{}}
-	phrases := []Phrase{}
 	var check string
 	if err := s.db.QueryRow("PRAGMA quick_check").Scan(&check); err != nil {
 		return a, nil, err
@@ -197,7 +196,7 @@ func (s *sqliteStore) load() (archive, []Phrase, error) {
 	if err != nil {
 		return a, nil, err
 	}
-	phrases, err = s.loadPhrases()
+	phrases, err := s.loadPhrases()
 	return a, phrases, err
 }
 
