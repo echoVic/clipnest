@@ -307,3 +307,68 @@ func TestClipboardExclusionsUnknownSourceSkipsOnMacOS(t *testing.T) {
 		t.Fatal("unknown source policy ignored", captured, err)
 	}
 }
+
+func TestCaptureFailureNoticeClearsWhenCaptureRecovers(t *testing.T) {
+	d := clipboardDesktop(t)
+	c := &testClipboard{access: clipboardAllowed, revision: 1, portable: []transfer.Format{transfer.Text}, text: []byte("retry"), readErr: errors.New("busy")}
+	d.captureWith(c)
+	if d.notice != captureFailedNotice {
+		t.Fatalf("notice after failed capture = %q", d.notice)
+	}
+	c.readErr = nil
+	d.captureWith(c)
+	if d.notice != "" || clipboardHistoryCount(t, d) != 1 {
+		t.Fatalf("recovered capture left notice %q", d.notice)
+	}
+	// Recording nothing new is a success too.
+	c.revision, c.readErr = 2, errors.New("busy")
+	d.captureWith(c)
+	c.access = clipboardDenied
+	d.captureWith(c)
+	if d.notice != "" {
+		t.Fatalf("capture without an error left notice %q", d.notice)
+	}
+	other := "快捷键已被占用，请从菜单栏打开"
+	d.notice = other
+	c.access, c.readErr = clipboardAllowed, nil
+	d.captureWith(c)
+	if d.notice != other {
+		t.Fatalf("successful capture replaced another notice with %q", d.notice)
+	}
+}
+
+func TestBackgroundFailureNoticesClearOnlyTheirOwn(t *testing.T) {
+	d := &Desktop{}
+	if !d.showFailure(saveFailedNotice, true) || d.notice != saveFailedNotice {
+		t.Fatal("save failure not shown", d.notice)
+	}
+	if d.showFailure(cleanupFailedNotice, false) || d.notice != saveFailedNotice {
+		t.Fatal("cleanup success cleared the save notice", d.notice)
+	}
+	if !d.showFailure(saveFailedNotice, false) || d.notice != "" {
+		t.Fatal("save success left its notice", d.notice)
+	}
+	d.notice = "内容已复制，未能自动粘贴。"
+	if d.showFailure(saveFailedNotice, false) || d.notice != "内容已复制，未能自动粘贴。" {
+		t.Fatal("save success cleared a different notice", d.notice)
+	}
+}
+
+func TestMonitorReportsEveryFailureAndTheFirstRecovery(t *testing.T) {
+	failed := false
+	full := errors.New("disk full")
+	var reports []bool
+	for _, err := range []error{nil, nil, full, full, nil, nil, full} {
+		if reportFailure(&failed, err) {
+			reports = append(reports, failed)
+		}
+	}
+	if fmt.Sprint(reports) != "[true true false true]" {
+		t.Fatalf("reports = %v, want [true true false true]", reports)
+	}
+	// A notice replaced while saving still fails returns on the next failure.
+	d := &Desktop{notice: ""}
+	if !d.showFailure(saveFailedNotice, true) || d.notice != saveFailedNotice {
+		t.Fatal("a lasting failure did not restore its notice", d.notice)
+	}
+}

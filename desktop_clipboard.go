@@ -101,12 +101,55 @@ func (d *Desktop) RequestClipboardPermission() (s PanelState, err error) {
 	return
 }
 
-func (d *Desktop) capture() {
-	before := d.clipboardAccess
-	if _, err := d.captureFrom(systemClipboard{d.n, mygo.Clipboard}, false); err != nil {
-		d.notice = "剪贴板暂时无法读取，请检查记录权限后重新复制"
+// Notices for transient failures. Each clears once its own operation
+// succeeds again.
+const (
+	captureFailedNotice = "剪贴板暂时无法读取，请检查记录权限后重新复制"
+	saveFailedNotice    = "历史暂时无法保存，请检查磁盘空间与目录权限"
+	cleanupFailedNotice = "历史自动清理失败，请检查磁盘空间与目录权限"
+)
+
+// showFailure shows notice after its operation fails and clears it after the
+// operation succeeds, but only while the banner still shows it: a different
+// notice set in between is not the operation's to clear. It reports whether
+// the banner changed. Main thread.
+func (d *Desktop) showFailure(notice string, failed bool) bool {
+	next := d.notice
+	if failed {
+		next = notice
+	} else if next == notice {
+		next = ""
 	}
-	if before != d.clipboardAccess && d.win != nil && d.win.IsVisible() {
+	if next == d.notice {
+		return false
+	}
+	d.notice = next
+	if !d.quitting && d.win != nil && d.win.IsVisible() {
+		_ = panelChanged.Broadcast(d.snapshot())
+	}
+	return true
+}
+
+// reportFailure records whether an operation failed and reports whether the
+// main thread has to hear of it: every failure, so that a notice replaced in
+// the meantime returns while the failure lasts, and the first success after
+// one. The goroutine running the operation keeps failed, so an operation that
+// keeps succeeding never waits for the main thread.
+func reportFailure(failed *bool, err error) bool {
+	was := *failed
+	*failed = err != nil
+	return was || *failed
+}
+
+func (d *Desktop) capture() { d.captureWith(systemClipboard{d.n, mygo.Clipboard}) }
+
+// captureWith is capture with the clipboard as a parameter, so tests can
+// substitute it. A capture without an error, recorded or not, is a success.
+func (d *Desktop) captureWith(c clipboardReader) {
+	before := d.clipboardAccess
+	_, err := d.captureFrom(c, false)
+	// A changed banner has already been broadcast, with the policy in it.
+	if !d.showFailure(captureFailedNotice, err != nil) && before != d.clipboardAccess && d.win != nil && d.win.IsVisible() {
 		_ = panelChanged.Broadcast(d.snapshot())
 	}
 	if before != d.clipboardAccess && d.preferences != nil {
@@ -196,6 +239,9 @@ func (d *Desktop) captureFrom(c clipboardReader, request bool) (bool, error) {
 }
 
 func (d *Desktop) monitor() {
+	// Owned by this goroutine: a save that keeps succeeding every two seconds
+	// never waits for the main thread.
+	var saveFailed, cleanupFailed bool
 	t := time.NewTicker(300 * time.Millisecond)
 	defer t.Stop()
 	save := time.NewTicker(2 * time.Second)
@@ -213,12 +259,14 @@ func (d *Desktop) monitor() {
 				}
 			})
 		case <-save.C:
-			if err := d.h.Save(); err != nil {
-				mygo.RunOnMain(func() { d.notice = "历史暂时无法保存，请检查磁盘空间与目录权限" })
+			if reportFailure(&saveFailed, d.h.Save()) {
+				failed := saveFailed
+				mygo.RunOnMain(func() { d.showFailure(saveFailedNotice, failed) })
 			}
 		case <-cleanup.C:
-			if err := d.h.Cleanup(); err != nil {
-				mygo.RunOnMain(func() { d.notice = "历史自动清理失败，请检查磁盘空间与目录权限" })
+			if reportFailure(&cleanupFailed, d.h.Cleanup()) {
+				failed := cleanupFailed
+				mygo.RunOnMain(func() { d.showFailure(cleanupFailedNotice, failed) })
 			}
 		}
 	}
