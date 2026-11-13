@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -50,7 +51,8 @@ func TestShortcutConfigRoundTripAndMissingFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0o600 {
+	// Windows reports writable files as 0666; POSIX permission bits do not apply.
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
 		t.Fatalf("shortcut config permissions = %v, want 0600", info.Mode().Perm())
 	}
 }

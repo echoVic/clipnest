@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  go:
+    name: Go (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    env:
+      CGO_ENABLED: '0'
+    steps:
+      - name: Preserve repository line endings
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Check formatting
+        run: test -z "$(git ls-files -z '*.go' | xargs -0 gofmt -l)"
+      - name: Vet
+        run: go vet ./...
+      - name: Test (macOS, race and native fixtures)
+        if: runner.os == 'macOS'
+        env:
+          CGO_ENABLED: '1'
+        run: go test -race -count=1 -timeout=10m ./...
+      - name: Test (Windows)
+        if: runner.os == 'Windows'
+        run: go test -count=1 -timeout=10m ./...
+      - name: MyGo vet
+        if: runner.os == 'macOS'
+        run: go tool mygo vet .
+      - name: Build desktop (macOS)
+        if: runner.os == 'macOS'
+        run: go build -o "$RUNNER_TEMP/clipnest" .
+      - name: Build desktop (Windows amd64 and arm64)
+        if: runner.os == 'Windows'
+        run: |
+          for arch in amd64 arm64; do
+            GOARCH="$arch" go build -o "$RUNNER_TEMP/clipnest-$arch.exe" .
+          done
+
+  web:
+    name: Browser tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Test browser demo and interactions
+        run: node --test web/*.test.mjs

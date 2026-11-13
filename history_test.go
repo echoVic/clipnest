@@ -7,6 +7,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -73,8 +74,8 @@ func TestPersistencePauseDeleteAndClear(t *testing.T) {
 	if !paused || len(got) != 1 || got[0].Text != a.Text {
 		t.Fatal("persistence changed content or pause state")
 	}
-	info, _ := os.Stat(path)
-	if info.Mode().Perm() != 0600 {
+	info, err := os.Stat(path)
+	if err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0600) {
 		t.Fatal("history is not private")
 	}
 	loaded.Remove(a.ID)

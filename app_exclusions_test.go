@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -34,7 +35,7 @@ func TestAppExclusionsPersistCopiesAndDeduplicates(t *testing.T) {
 		t.Fatal("copy or restart changed rules", err)
 	}
 	info, err := os.Stat(path)
-	if err != nil || info.Mode().Perm() != 0600 {
+	if err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0600) {
 		t.Fatal("rules are not private", err)
 	}
 	if err := reopened.Remove("com.a.test"); err != nil || reopened.Contains("com.a.test") {

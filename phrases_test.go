@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -55,8 +56,8 @@ func TestPhrasesPersistInUserOrder(t *testing.T) {
 	if len(got) != 2 || got[0] != "third" || got[1] != "  Simple prose.\n" {
 		t.Fatalf("order or exact text lost: %q", got)
 	}
-	info, _ := os.Stat(path)
-	if info.Mode().Perm() != 0600 {
+	info, err := os.Stat(path)
+	if err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0600) {
 		t.Fatal("phrases file is not private")
 	}
 }

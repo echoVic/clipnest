@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"sync"
 	"testing"
 )
@@ -67,7 +68,7 @@ func TestSQLiteNewInstallationAndRestart(t *testing.T) {
 		}
 	}
 	info, err := os.Stat(filepath.Join(dir, "clipnest.sqlite3"))
-	if err != nil || info.Mode().Perm() != 0600 {
+	if err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0600) {
 		t.Fatal("database must be private", err)
 	}
 }
