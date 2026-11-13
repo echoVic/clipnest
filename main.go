@@ -99,6 +99,9 @@ func main() {
 	})
 	mygo.App.WhenReady(d.ready)
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
+		if d.quitting {
+			return
+		}
 		d.quitting = true
 		d.cancelPermission()
 		d.cancelExclusions()
@@ -106,7 +109,9 @@ func main() {
 		close(d.stop)
 	})
 	mygo.App.OnWillQuit(func(*mygo.QuitEvent) {
-		_ = h.Save()
+		if err := h.Save(); err != nil {
+			log.Printf("saving history on quit: %v", err)
+		}
 		mygo.GlobalShortcut.UnregisterAll()
 		if d.tray != nil {
 			d.tray.Destroy()

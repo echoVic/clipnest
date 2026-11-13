@@ -70,8 +70,8 @@ func (d *Desktop) OpenClipboardPermission() error {
 // Permission belongs to macOS; a successful one-time read is not an Allow grant.
 func (d *Desktop) RequestClipboardPermission() (s PanelState, err error) {
 	mygo.RunOnMain(func() {
-		visible := d.win != nil && d.win.IsVisible()
-		if d.preferences != nil && d.preferences.win.IsVisible() {
+		visible := d.win != nil && d.win.IsVisible() && !d.win.IsMinimized()
+		if d.preferences != nil && d.preferences.win.IsVisible() && !d.preferences.win.IsMinimized() {
 			visible = true
 		}
 		if d.busy || d.quitting || !visible {
