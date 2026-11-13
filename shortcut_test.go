@@ -14,7 +14,7 @@ func TestShortcutBindingFromEventRequiresModifierAndFormatsPerPlatform(t *testin
 	if _, ok := shortcutBindingFromEvent("darwin", ui.Modifiers(0), ui.KeyK, ui.KeyUnknown); ok {
 		t.Fatal("a bare key must not become a global shortcut")
 	}
-	binding, ok := shortcutBindingFromEvent("darwin", ui.Cmd|ui.Shift, ui.KeyK, ui.KeyUnknown)
+	binding, ok := shortcutBindingFromEvent("darwin", ui.Super|ui.Shift, ui.KeyK, ui.KeyUnknown)
 	if !ok {
 		t.Fatal("modified key should be accepted")
 	}
@@ -40,11 +40,11 @@ func TestShortcutConfigRoundTripAndMissingFile(t *testing.T) {
 	if got, err := loadShortcutConfig(path); err != nil || got != "" {
 		t.Fatalf("missing config should use defaults: %q %v", got, err)
 	}
-	if err := saveShortcutConfig(path, "Command+Shift+K"); err != nil {
+	if err := saveShortcutConfig(path, "Ctrl+Shift+K"); err != nil {
 		t.Fatal(err)
 	}
 	got, err := loadShortcutConfig(path)
-	if err != nil || got != "Command+Shift+K" {
+	if err != nil || got != "Ctrl+Shift+K" {
 		t.Fatalf("shortcut config did not round trip: %q %v", got, err)
 	}
 	info, err := os.Stat(path)
@@ -132,7 +132,7 @@ func TestShortcutReplaceSameBindingDoesNotReregister(t *testing.T) {
 func TestShortcutBindingUsesPhysicalPositionForGlobalRegistration(t *testing.T) {
 	// MyGo's desktop hotkeys use ANSI key positions; a French-layout A at
 	// the Q position must register Q, the key the person actually pressed.
-	binding, ok := shortcutBindingFromEvent("darwin", ui.Cmd|ui.Shift, ui.KeyA, ui.KeyQ)
+	binding, ok := shortcutBindingFromEvent("darwin", ui.Super|ui.Shift, ui.KeyA, ui.KeyQ)
 	if !ok || binding.Accelerator != "Command+Shift+Q" {
 		t.Fatalf("wrong physical accelerator: %+v", binding)
 	}

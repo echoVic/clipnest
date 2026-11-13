@@ -8,6 +8,7 @@ import (
 	"image/color"
 	"image/png"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -162,6 +163,23 @@ func searchTotal(t *testing.T, h *History, q string) int {
 	return p.Total
 }
 
+func imageTextPreviewState(state ImageTextState) ImageTextState {
+	if runtime.GOOS != "darwin" {
+		return imageTextUnsupported
+	}
+	return state
+}
+
+func assertImageTextPreview(t *testing.T, e Entry, state ImageTextState, text, title string) {
+	t.Helper()
+	if runtime.GOOS != "darwin" {
+		state, text, title = imageTextUnsupported, "", defaultImageTitle
+	}
+	if e.ImageTextState != state || e.ImageText != text || e.Title != title {
+		t.Fatalf("image preview = (%q, %q, %q), want (%q, %q, %q)", e.ImageTextState, e.ImageText, e.Title, state, text, title)
+	}
+}
+
 func TestImageTextResultBecomesTitleSearchAndDetail(t *testing.T) {
 	im, other := imageEntry(t, 10), entry(t, "unrelated")
 	s := imageTextStorage(t, im, other)
@@ -204,10 +222,11 @@ func TestImageTextResultBecomesTitleSearchAndDetail(t *testing.T) {
 		t.Fatal("image title is not the first recognized line", page.Entries, err)
 	}
 	e, err := v.Detail(im.ID)
-	if err != nil || e.ImageText != "部署失败：Error 502\nnginx 配置 config.yaml" || e.ImageTextState != imageTextReady {
-		t.Fatalf("detail lacks recognized text: %q %q %v", e.ImageText, e.ImageTextState, err)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if e.Title != "部署失败：Error 502" || !bytes.Equal(e.Image, im.Image) {
+	assertImageTextPreview(t, e, imageTextReady, "部署失败：Error 502\nnginx 配置 config.yaml", "部署失败：Error 502")
+	if !bytes.Equal(e.Image, im.Image) {
 		t.Fatal("detail changed image or title", e.Title)
 	}
 	if summary := e.summary(); summary.ImageText != "" {
@@ -250,10 +269,10 @@ func detail(t *testing.T, h *History, id string) Entry {
 func TestImageTextStatesAndFailuresAreNotRetried(t *testing.T) {
 	im, big := imageEntry(t, 20), oversizedImage(t)
 	s := imageTextStorage(t, im, big)
-	if state := detail(t, s.History, im.ID).ImageTextState; state != imageTextPending {
+	if state := detail(t, s.History, im.ID).ImageTextState; state != imageTextPreviewState(imageTextPending) {
 		t.Fatal("new image is not pending", state)
 	}
-	if state := detail(t, s.History, big.ID).ImageTextState; state != imageTextTooLarge {
+	if state := detail(t, s.History, big.ID).ImageTextState; state != imageTextPreviewState(imageTextTooLarge) {
 		t.Fatal("oversized image is not unavailable", state)
 	}
 	calls := 0
@@ -265,9 +284,7 @@ func TestImageTextStatesAndFailuresAreNotRetried(t *testing.T) {
 	})
 	recognizeAll(t, s.History, func([]byte) (string, error) { t.Fatal("failed image recognized again"); return "", nil })
 	e := detail(t, s.History, im.ID)
-	if e.ImageTextState != imageTextFailed || e.ImageText != "" || e.Title != "复制的图片" {
-		t.Fatal("failure stored text or changed the title", e.ImageTextState, e.ImageText, e.Title)
-	}
+	assertImageTextPreview(t, e, imageTextFailed, "", defaultImageTitle)
 	if n := searchTotal(t, s.History, "partial"); n != 0 {
 		t.Fatal("failed recognition was indexed")
 	}
@@ -278,9 +295,7 @@ func TestImageTextEmptyResultKeepsDefaultTitle(t *testing.T) {
 	s := imageTextStorage(t, im)
 	recognizeAll(t, s.History, func([]byte) (string, error) { return " \n\t\n", nil })
 	e := detail(t, s.History, im.ID)
-	if e.ImageTextState != imageTextReady || e.ImageText != "" || e.Title != "复制的图片" {
-		t.Fatal("empty result was not a completed image without text", e.ImageTextState, e.ImageText, e.Title)
-	}
+	assertImageTextPreview(t, e, imageTextReady, "", defaultImageTitle)
 	var rows int
 	if err := s.History.db.db.QueryRow("SELECT count(*) FROM history_ocr").Scan(&rows); err != nil || rows != 0 {
 		t.Fatal("empty result stored a text row", rows, err)
@@ -295,7 +310,7 @@ func TestImageTextUnavailableWithJSONStorage(t *testing.T) {
 	im := imageEntry(t, 30)
 	h.Add(im)
 	recognizeAll(t, h, func([]byte) (string, error) { t.Fatal("JSON storage recognized an image"); return "", nil })
-	if state := detail(t, h, im.ID).ImageTextState; state != imageTextNeedsSQLite {
+	if state := detail(t, h, im.ID).ImageTextState; state != imageTextPreviewState(imageTextNeedsSQLite) {
 		t.Fatal("JSON image text state", state)
 	}
 }
@@ -329,7 +344,9 @@ func TestImageTextSurvivesRecopyWithNewSource(t *testing.T) {
 			t.Fatalf("recopy search %q: %d", q, n)
 		}
 	}
-	if e := detail(t, s.History, im.ID); e.ImageText != "invoice INV-2026-0042" || e.Source != "预览" {
+	e := detail(t, s.History, im.ID)
+	assertImageTextPreview(t, e, imageTextReady, "invoice INV-2026-0042", "invoice INV-2026-0042")
+	if e.Source != "预览" {
 		t.Fatal("recopy lost recognized text", e.ImageText, e.Source)
 	}
 }
@@ -417,9 +434,17 @@ func TestImageTextReenableDiscardsPreviousRecognition(t *testing.T) {
 				}
 				return "new recognition", nil
 			})
-			if e := detail(t, s.History, im.ID); calls != 2 || e.ImageText != "new recognition" || e.ImageTextState != imageTextReady {
-				t.Fatalf("previous recognition survived reenable: calls=%d state=%s text=%q", calls, e.ImageTextState, e.ImageText)
+			if calls != 2 {
+				t.Fatalf("recognition calls = %d, want 2", calls)
 			}
+			var stored string
+			if err := s.History.db.db.QueryRow("SELECT text FROM history_ocr WHERE id=?", im.ID).Scan(&stored); err != nil || stored != "new recognition" {
+				t.Fatalf("stored recognition = %q, err=%v", stored, err)
+			}
+			if imageTextStates(t, s.History.db.db)[im.ID] != ocrDone || searchTotal(t, s.History, "previous private text") != 0 || searchTotal(t, s.History, "new recognition") != 1 {
+				t.Fatal("previous recognition survived reenable in storage or search")
+			}
+			assertImageTextPreview(t, detail(t, s.History, im.ID), imageTextReady, "new recognition", "new recognition")
 		})
 	}
 }
@@ -456,9 +481,7 @@ func TestImageTextDisableRemovesTextTitlesAndIndexThenEnableRequeues(t *testing.
 	if imageTextRows(t, s.History) != 0 || indexed() || searchTotal(t, s.History, "私密") != 0 || searchTotal(t, s.History, "复制的图片") != 2 {
 		t.Fatal("disable left recognized text in storage or search")
 	}
-	if e := detail(t, s.History, im.ID); e.ImageTextState != imageTextDisabled || e.ImageText != "" || e.Title != defaultImageTitle {
-		t.Fatal("disabled detail", e.ImageTextState, e.ImageText, e.Title)
-	}
+	assertImageTextPreview(t, detail(t, s.History, im.ID), imageTextDisabled, "", defaultImageTitle)
 	if s.Status().ImageText {
 		t.Fatal("status still enabled")
 	}
@@ -517,6 +540,12 @@ func TestImageTextCopyIsTheTextCaptureWouldSkip(t *testing.T) {
 	im := imageEntry(t, 80)
 	s := imageTextStorage(t, im)
 	recognizeAll(t, s.History, func([]byte) (string, error) { return "第一行\nsecond line", nil })
+	if runtime.GOOS != "darwin" {
+		if _, err := imageTextCopy(detail(t, s.History, im.ID)); err == nil {
+			t.Fatal("unsupported platform exposed recognized text for copying")
+		}
+		return
+	}
 	e, err := imageTextCopy(detail(t, s.History, im.ID))
 	if err != nil {
 		t.Fatal(err)

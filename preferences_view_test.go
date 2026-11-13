@@ -150,7 +150,8 @@ func TestPreferencesShortcutRecordingAndCancel(t *testing.T) {
 	if saved != "" || !v.recordingShortcut {
 		t.Fatal("bare key was saved")
 	}
-	tt.Key(ui.Cmd|ui.Shift, ui.KeyK)
+	// This view fixture models macOS even when the test runs on Windows.
+	tt.Key(ui.Super|ui.Shift, ui.KeyK)
 	if saved != "Command+Shift+K" || v.recordingShortcut {
 		t.Fatal("shortcut not submitted", saved)
 	}
@@ -178,7 +179,7 @@ func TestPreferencesShortcutCanRecordWindowCloseChordAndReset(t *testing.T) {
 	v.actions.close = func() { closed++ }
 	tt := ui.NewTester(v.draw, 620, 580)
 	tt.Click("修改唤起快捷键")
-	tt.Key(ui.Cmd, ui.KeyW)
+	tt.Key(ui.Super, ui.KeyW)
 	if saved != "Command+W" || closed != 0 {
 		t.Fatalf("saved=%q closed=%d", saved, closed)
 	}
