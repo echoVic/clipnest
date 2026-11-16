@@ -52,7 +52,9 @@ func TestImageTextVisionJoinsLinesAcrossTiles(t *testing.T) {
 
 func TestImageTextVisionKeepsLinesInOverlappingRowsOnce(t *testing.T) {
 	text := recognizeFixture(t, "tall.png")
-	want := []string{"第一段", "Both tiles above and below see this line", "第二段", "Another line seen by two tiles", "最后一行"}
+	// macOS 27 reads the CJK prefix of this edge line as "x-17"; the ASCII tail
+	// stays stable, and the assertion only needs a unique marker for the line.
+	want := []string{"第一段", "Both tiles above and below see this line", "第二段", "Another line seen by two tiles", "end of screenshot"}
 	at := 0
 	for _, w := range want {
 		if strings.Count(text, w) != 1 {
