@@ -10,6 +10,7 @@ export function keyAction(event, ctx) {
   if (key === 'Escape') return { type: ctx.hasQuery ? 'clear-search' : 'dismiss' };
   if (command && lower === 'k') return { type: 'search' };
   if (ctx.busy) return null;
+  if (command && !event.altKey && !event.shiftKey && key === ',') return { type: 'settings' };
   if (command && !event.altKey && !event.shiftKey && phrases) {
     if (lower === 'n') return { type: 'new' };
     if (lower === 'e' && ctx.hasSelection) return { type: 'edit' };
