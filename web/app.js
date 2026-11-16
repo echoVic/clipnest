@@ -223,7 +223,8 @@ function adaptPlatformHints() {
   });
   const emptyHint = document.querySelector('#empty p strong');
   if (emptyHint) emptyHint.textContent = state.shortcut;
-  document.querySelectorAll('[title]').forEach(el => { if (/[⌘⌥⇧]/.test(el.title)) el.title = map(el.title); });
+  // Titles read 「偏好设置（⌘,）」, so keep the bracket tight: 「偏好设置（Ctrl ,）」.
+  document.querySelectorAll('[title]').forEach(el => { if (/[⌘⌥⇧]/.test(el.title)) el.title = map(el.title).replace(/（ /g, '（'); });
 }
 function applyState(next, reopen = false) {
   if (!acceptPanel(state, next)) return;
@@ -660,6 +661,7 @@ document.addEventListener('keydown', event => {
     case 'clear-search': $('#search').value = ''; $('#clear-search').hidden = true; refresh(); $('#list').focus(); break;
     case 'dismiss': dismiss(); break;
     case 'search': $('#search').focus(); break;
+    case 'settings': $('#settings').click(); break;
     case 'select': select(moveIndex(pages.selected, action.delta, pages.total)); if (!typing) $('#list').focus({ preventScroll: true }); break;
     case 'view': switchView(action.view); break;
     case 'choose': choose(false); break;

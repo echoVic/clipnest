@@ -19,6 +19,12 @@ test('existing keys behave the same on both pages', () => {
  }
  assert.equal(type('V', { metaKey: true, shiftKey: true }, { demo: true, dialogOpen: true }), 'reopen'); assert.equal(type('v', { metaKey: true, shiftKey: true }), null);
 });
+test('command comma opens preferences from either page', () => {
+ for (const view of ['history', 'phrases']) {
+  assert.equal(type(',', { metaKey: true }, { view }), 'settings'); assert.equal(type(',', { ctrlKey: true }, { view, typing: true }), 'settings');
+  assert.equal(type(',', {}, { view }), null); assert.equal(type(',', { metaKey: true }, { view, dialogOpen: true }), null);
+ }
+});
 test('left and right switch pages only outside inputs', () => {
  assert.deepEqual(keyAction(key('ArrowRight'), ctx()), { type: 'view', view: 'phrases' });
  assert.deepEqual(keyAction(key('ArrowLeft'), ctx({ view: 'phrases' })), { type: 'view', view: 'history' });
@@ -42,14 +48,14 @@ test('reorder, new and edit belong to the phrases page', () => {
 });
 test('new keys reject extra modifiers', () => {
  const phrases = { view: 'phrases' };
- for (const k of ['n', 'e']) for (const mods of [{ shiftKey: true }, { altKey: true }]) assert.equal(type(k, { metaKey: true, ...mods }, phrases), null, `${k} with ${Object.keys(mods)}`);
+ for (const k of ['n', 'e', ',']) for (const mods of [{ shiftKey: true }, { altKey: true }]) assert.equal(type(k, { metaKey: true, ...mods }, phrases), null, `${k} with ${Object.keys(mods)}`);
  assert.equal(type('ArrowDown', { altKey: true, metaKey: true }, phrases), null); assert.equal(type('ArrowDown', { altKey: true, shiftKey: true }, phrases), null);
  assert.equal(type('ArrowRight', { metaKey: true }), null); assert.equal(type('ArrowRight', { altKey: true }), null);
  assert.equal(type('V', { shiftKey: true }, { demo: true }), null);
 });
 test('busy, open dialogs and IME composition block the keys', () => {
  const phrases = { view: 'phrases' };
- for (const [k, mods] of [['ArrowRight', {}], ['ArrowDown', { altKey: true }], ['n', { metaKey: true }], ['e', { metaKey: true }], ['ArrowDown', {}], ['1', {}], ['Enter', {}]]) {
+ for (const [k, mods] of [['ArrowRight', {}], ['ArrowDown', { altKey: true }], ['n', { metaKey: true }], ['e', { metaKey: true }], [',', { metaKey: true }], ['ArrowDown', {}], ['1', {}], ['Enter', {}]]) {
   assert.equal(type(k, mods, { ...phrases, busy: true }), null, `${k} while busy`);
   assert.equal(type(k, mods, { ...phrases, dialogOpen: true }), null, `${k} with a dialog open`);
   assert.equal(type(k, { ...mods, isComposing: true }, phrases), null, `${k} while composing`);
