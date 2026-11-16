@@ -2,6 +2,11 @@
 export function moveIndex(index, delta, length) {
   return length ? Math.max(0, Math.min(length - 1, index + delta)) : -1;
 }
+// After removing the entry at index, the next one moves up into its place;
+// removing the last one selects the one before it.
+export function indexAfterRemoval(index, length) {
+  return moveIndex(index, 0, length - 1);
+}
 export function numberIndex(key, length) {
   return /^[1-9]$/.test(key) && Number(key) <= length ? Number(key) - 1 : -1;
 }

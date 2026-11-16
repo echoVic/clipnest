@@ -53,7 +53,10 @@ var preferenceTabs = []struct {
 	{"通用", ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 7h7m5 0h4M4 17h3m5 0h8"/><circle cx="13.5" cy="7" r="2.5"/><circle cx="9.5" cy="17" r="2.5"/></svg>`))},
 	{"隐私", ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m12 3 8 3v5c0 5-8 10-8 10s-8-5-8-10V6Z"/><path d="m8 11 3 3 5-5"/></svg>`))},
 	{"存储", ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0"/></svg>`))},
+	{"快捷键", ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M6.25 10h1M9.75 10h1M13.25 10h1M16.75 10h1M8 14h8"/></svg>`))},
 }
+
+const shortcutsTab = 3
 
 func preferencesTheme(c *ui.Context) ui.Theme {
 	theme := *c.Theme()
@@ -67,7 +70,7 @@ func preferencesTheme(c *ui.Context) ui.Theme {
 
 func (v *preferencesView) draw(c *ui.Context) {
 	theme := preferencesTheme(c)
-	if v.tab != 0 {
+	if v.tab != shortcutsTab {
 		v.recordingShortcut = false
 	}
 	if !v.recordingShortcut && !v.confirmClear && !v.busy && (c.Shortcut(0, ui.KeyEscape) || c.Shortcut(ui.Cmd, ui.KeyW)) && v.actions.close != nil {
@@ -104,6 +107,8 @@ func (v *preferencesView) draw(c *ui.Context) {
 					v.privacy(c)
 				case 2:
 					v.storage(c)
+				case shortcutsTab:
+					v.shortcuts(c)
 				}
 				if v.notice != "" {
 					color := theme.TextMuted
@@ -149,8 +154,30 @@ func (v *preferencesView) general(c *ui.Context) {
 				}
 			}
 		})
+	})
+	v.group(c, "版本与反馈", func() {
+		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(16).Children(func() {
+			ui.Column(c).Grow(1).Gap(5).Children(func() {
+				ui.Text(c, "Clipnest "+v.state.Version).FontWeight(500)
+				ui.Text(c, "每 4 小时自动检查更新。").FontSize(12).TextColor(c.Theme().TextMuted)
+			})
+			if ui.Button(c, "检查更新…").Disabled(v.actions.update == nil).Clicked() {
+				v.actions.update()
+			}
+		})
 		ui.Row(c).FillWidth().Height(1).Background(c.Theme().Border)
-		v.row(c, "唤起面板", "点击快捷键修改。方向键或数字选择，Enter 粘贴。", func() {
+		ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
+			ui.Text(c, "遇到问题，或想提出建议？").Grow(1).FontSize(12).TextColor(c.Theme().TextMuted)
+			ui.Link(c, "发送反馈…", "https://github.com/echoVic/clipnest/issues/new")
+		})
+	})
+}
+
+// The summon shortcut is the one key that works outside the panel, so it is
+// the one people can change; the panel keys below are listed for reference.
+func (v *preferencesView) shortcuts(c *ui.Context) {
+	v.group(c, "唤起", func() {
+		v.row(c, "唤起或收起面板", "点击快捷键修改。", func() {
 			ui.Column(c).AlignItems(ui.End).Gap(6).Children(func() {
 				label := v.state.Shortcut
 				if v.recordingShortcut {
@@ -179,20 +206,32 @@ func (v *preferencesView) general(c *ui.Context) {
 			ui.Text(c, v.state.ShortcutNotice).FontSize(12).TextColor(c.Theme().Danger)
 		}
 	})
-	v.group(c, "版本与反馈", func() {
-		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(16).Children(func() {
-			ui.Column(c).Grow(1).Gap(5).Children(func() {
-				ui.Text(c, "Clipnest "+v.state.Version).FontWeight(500)
-				ui.Text(c, "每 4 小时自动检查更新。").FontSize(12).TextColor(c.Theme().TextMuted)
+	for _, group := range panelShortcuts() {
+		v.group(c, group.Group, func() {
+			ui.Column(c).FillWidth().Gap(12).Children(func() {
+				for _, item := range group.Items {
+					v.shortcutRow(c, item)
+				}
 			})
-			if ui.Button(c, "检查更新…").Disabled(v.actions.update == nil).Clicked() {
-				v.actions.update()
+		})
+	}
+}
+
+func (v *preferencesView) shortcutRow(c *ui.Context, item shortcutItem) {
+	theme := c.Theme()
+	ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(16).Children(func() {
+		ui.Column(c).Grow(1).Shrink(1).Gap(3).Children(func() {
+			ui.Text(c, item.Label)
+			if item.Note != "" {
+				ui.Text(c, item.Note).FontSize(12).TextColor(theme.TextMuted)
 			}
 		})
-		ui.Row(c).FillWidth().Height(1).Background(c.Theme().Border)
-		ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
-			ui.Text(c, "遇到问题，或想提出建议？").Grow(1).FontSize(12).TextColor(c.Theme().TextMuted)
-			ui.Link(c, "发送反馈…", "https://github.com/echoVic/clipnest/issues/new")
+		ui.Row(c).Gap(5).Children(func() {
+			for _, key := range item.keysFor(v.state.Platform) {
+				ui.Row(c).Padding(2, 7).MinWidth(24).Justify(ui.Center).Radius(5).Border(1, theme.Border).Background(theme.Background).Children(func() {
+					ui.Text(c, key).FontSize(12)
+				})
+			}
 		})
 	})
 }

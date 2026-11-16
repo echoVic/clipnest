@@ -1,0 +1,51 @@
+[
+  {
+    "group": "面板",
+    "items": [
+      { "label": "选择上一条或下一条", "keys": ["↑", "↓"], "action": "select" },
+      { "label": "粘贴选中项", "keys": ["↩"], "action": "choose" },
+      { "label": "粘贴第 1–9 条", "note": "焦点在搜索框时，数字会输入为搜索词", "keys": ["1–9"], "action": "number" },
+      { "label": "仅复制", "keys": ["⌘ ↩"], "action": "copy" },
+      { "label": "切换历史和常用语", "note": "焦点在搜索框时用于移动光标", "keys": ["←", "→"], "action": "view" },
+      { "label": "搜索", "keys": ["⌘ K"], "action": "search" },
+      { "label": "更多操作", "keys": ["⌘ /"], "action": "menu" },
+      { "label": "删除选中项", "note": "历史立即删除，常用语先确认；焦点在搜索框时照常删字", "keys": ["⌘ ⌫"], "other": ["Delete"], "action": "delete" },
+      { "label": "打开偏好设置", "keys": ["⌘ ,"], "action": "settings" },
+      { "label": "清空搜索词，再按一次关闭面板", "keys": ["Esc"], "action": ["clear-search", "dismiss"] }
+    ]
+  },
+  {
+    "group": "历史",
+    "view": "history",
+    "items": [
+      { "label": "存为常用语", "note": "图片和超过 64 KB 的文字不能存", "keys": ["⌘ S"], "action": "save-phrase" },
+      { "label": "用默认浏览器打开链接", "keys": ["⌘ O"], "action": "open-link" }
+    ]
+  },
+  {
+    "group": "常用语",
+    "view": "phrases",
+    "items": [
+      { "label": "新建", "keys": ["⌘ N"], "action": "new" },
+      { "label": "编辑", "keys": ["⌘ E"], "action": "edit" },
+      { "label": "上移或下移", "note": "有搜索词时不能调整", "keys": ["⌥ ↑", "⌥ ↓"], "action": "reorder" }
+    ]
+  },
+  {
+    "group": "动作菜单",
+    "context": "menu",
+    "items": [
+      { "label": "选择上一项或下一项", "keys": ["↑", "↓"], "action": "menu-move" },
+      { "label": "执行选中的操作", "keys": ["↩"] },
+      { "label": "关闭菜单", "keys": ["Esc", "⌘ /"], "action": ["cancel-dialog", "menu"] }
+    ]
+  },
+  {
+    "group": "编辑常用语",
+    "context": "dialog",
+    "items": [
+      { "label": "保存", "keys": ["⌘ ↩"] },
+      { "label": "取消", "keys": ["Esc"], "action": "cancel-dialog" }
+    ]
+  }
+]
