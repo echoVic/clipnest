@@ -160,6 +160,14 @@ export const Desktop = {
     return call("Desktop.OpenClipboardPermission");
   },
   /**
+   * OpenLink opens a link entry in the default browser, then hides the panel
+   * without reactivating the source app, so the browser keeps focus. A failure
+   * leaves the panel open to show the error.
+   */
+  openLink(session: number, id: string): Promise<void> {
+    return call("Desktop.OpenLink", session, id);
+  },
+  /**
    * OpenPermission opens the system settings where the user grants Accessibility.
    * Guide waits for the user to grant it, so it runs off the main thread; the
    * panel keeps following System Settings on its own until it is done.

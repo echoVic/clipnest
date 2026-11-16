@@ -1,5 +1,6 @@
-import { moveIndex, WheelSelection } from './selection.js';
+import { moveIndex, indexAfterRemoval, WheelSelection } from './selection.js';
 import { keyAction } from './keys.js';
+import { entryActions } from './actions.js';
 import { createDemo } from './demo.js';
 import { DetailCache, DeferredPreview, PagedList, PAGE_SIZE, ScrollRenderQueue, virtualRange, scrollForIndex, acceptPanel, panelReadError, updateSelection, characterCount } from './responsiveness.js';
 import { looksLikeMarkdown, renderMarkdown } from './markdown.js';
@@ -36,6 +37,9 @@ const currentEntry = () => pages.entry(pages.selected);
 const context = () => ({ session: state.session, revision: queryVersion, q: $('#search').value, kind, view });
 const blocked = () => busy || queryPending || !!pages.error || pages.retrying || (view === 'history' && state.loading);
 let rows = Object.create(null), paintedSelection = -1, paintedRange = { start: 0, end: 0, total: 0 };
+// A history removal reloads the panel; reselect the same position once the
+// reloaded list for the same search arrives, so ⌘⌫ can be pressed again.
+let restore = null, imageTextReady = null, menuReturnFocus = null;
 const listRange = () => {
   const list = $('#list'), total = pages.error ? 0 : pages.total;
   return { ...virtualRange(total, list.scrollTop, list.clientHeight || 280), total };
@@ -233,6 +237,7 @@ function applyState(next, reopen = false) {
   const { entries: firstEntries = [], ...metadata } = next;
   state = metadata; adaptPlatformHints(); header();
   if (reopen && fresh) {
+    restore = null;
     $('#search').value = ''; $('#clear-search').hidden = true; kind = 'all'; view = 'history'; showView();
     $$('.filters button').forEach(b => { b.classList.toggle('active', b.dataset.kind === kind); b.setAttribute('aria-pressed', b.dataset.kind === kind); });
     document.body.classList.remove('dismissed'); $('#panel').classList.remove('dismissed');
@@ -265,9 +270,21 @@ async function refresh(keepId, firstPage) {
       pages.select(index);
     } else if (!firstPage) await pages.ensure(0);
     if (version !== queryVersion) return;
+    const restored = view === 'history' && !!restore;
+    if (restored) {
+      if (restore.q === $('#search').value && restore.kind === kind) pages.select(restore.index);
+      restore = null;
+    }
     queryPending = !pages.pages.size && !pages.error;
     $('#list').scrollTop = scrollForIndex(Math.max(0, pages.selected), 0, $('#list').clientHeight);
     render();
+    // The list hides while the panel reloads: it ignored the scroll above and
+    // dropped focus. Scroll again now that it shows; the scroll listener repaints.
+    if (restored) {
+      const list = $('#list');
+      list.scrollTop = scrollForIndex(Math.max(0, pages.selected), 0, list.clientHeight);
+      if (document.activeElement === document.body) list.focus({ preventScroll: true });
+    }
   } catch (e) {
     if (version !== queryVersion) return;
     queryPending = false; pages.error = e; render();
@@ -415,19 +432,11 @@ async function updatePreview() {
     }
     $('#preview-body').replaceChildren(content); $('#preview-body').scrollTop = 0;
     const info = node('span', '', e.kind === 'image' ? `${e.width} × ${e.height} · PNG` : `${characterCount(e.text || '')} 个字符 · ${labels[e.kind] === '代码' ? '纯文本代码' : '纯文本'}`);
-    const remove = node('button', 'icon-button delete-entry'); remove.title = '移除此条记录'; remove.setAttribute('aria-label', '移除此条记录'); remove.append(icon('trash'));
-    remove.onclick = async () => {
-      if (blocked() || session !== state.session || currentEntry()?.id !== e.id) return;
-      busy = true; actionButtons();
-      try { applyState(await call('Delete', session, e.id)); toast('已移除这条记录'); }
-      catch (err) { toast(message(err)); }
-      finally { busy = false; render(); }
-    };
-    $('#preview-meta').replaceChildren(info, remove);
-    if (imageText?.button) {
-      const actions = node('span', 'meta-actions'); actions.append(imageText.button, remove);
-      $('#preview-meta').replaceChildren(info, actions);
-    }
+    const remove = node('button', 'icon-button delete-entry'); remove.title = `移除此条记录（${ctrlPlatform() ? 'Delete' : '⌘⌫'}）`; remove.setAttribute('aria-label', '移除此条记录'); remove.append(icon('trash'));
+    remove.onclick = () => { if (session === state.session && currentEntry()?.id === e.id) removeEntry(); };
+    imageTextReady = imageText?.button ? e.id : null;
+    const actions = node('span', 'meta-actions'); actions.append(...(imageText?.button ? [imageText.button] : []), remove, moreButton());
+    $('#preview-meta').replaceChildren(info, actions);
   } catch (err) { if (version === detailVersion) toast(message(err)); }
 }
 // Copy-only: the text goes to the clipboard and never becomes a history entry.
@@ -453,8 +462,8 @@ async function phrasePreview(entry, version) {
     }
     $('#preview-body').scrollTop = 0;
     const edit = node('button', 'icon-button edit-phrase'); edit.title = ctrlPlatform() ? '编辑（Ctrl E）' : '编辑（⌘E）'; edit.setAttribute('aria-label', '编辑这条常用语'); edit.append(icon('edit')); edit.onclick = editPhrase;
-    const remove = node('button', 'icon-button delete-entry'); remove.title = '删除这条常用语'; remove.setAttribute('aria-label', '删除这条常用语'); remove.append(icon('trash')); remove.onclick = askDeletePhrase;
-    const actions = node('span', 'meta-actions'); actions.append(edit, remove);
+    const remove = node('button', 'icon-button delete-entry'); remove.title = `删除这条常用语（${ctrlPlatform() ? 'Delete' : '⌘⌫'}）`; remove.setAttribute('aria-label', '删除这条常用语'); remove.append(icon('trash')); remove.onclick = askDeletePhrase;
+    const actions = node('span', 'meta-actions'); actions.append(edit, remove, moreButton());
     $('#preview-meta').replaceChildren(node('span', '', `${characterCount(p.text)} 个字符`), actions);
   } catch (err) { if (version === detailVersion) toast(message(err)); }
 }
@@ -494,7 +503,7 @@ async function choose(copyOnly, pick) {
 // the text, and returning to the phrases page reopens it.
 function openEditor(next = draft) {
   draft = next;
-  $('#phrase-editor-title').textContent = draft.id ? '编辑常用语' : '新建常用语';
+  $('#phrase-editor-title').textContent = draft.id ? '编辑常用语' : draft.saveAs ? '存为常用语' : '新建常用语';
   $('#phrase-text').value = draft.text; $('#phrase-error').hidden = true; editorChanged();
   if (!$('#phrase-editor').open) $('#phrase-editor').showModal();
   $('#phrase-text').focus();
@@ -512,8 +521,10 @@ async function savePhrase() {
   if (!draft || $('#phrase-save').disabled) return;
   $('#phrase-save').disabled = true;
   try {
-    const saved = await call('SavePhrase', draft.id, draft.text);
+    const saved = await call('SavePhrase', draft.id, draft.text), saveAs = draft.saveAs;
     draft = null; $('#phrase-editor').close();
+    // Saving from the history page keeps the user where they were.
+    if (view !== 'phrases') { $('#list').focus({ preventScroll: true }); toast(saveAs ? '已存为常用语' : '常用语已保存'); return; }
     await refresh(saved.id);
     if (currentEntry()?.id !== saved.id) { $('#search').value = ''; $('#clear-search').hidden = true; await refresh(saved.id); }
     $('#list').focus({ preventScroll: true });
@@ -525,6 +536,90 @@ function cancelEditor() {
   draft = null; $('#phrase-editor').close();
 }
 function askDeletePhrase() { if (!blocked() && currentEntry()) $('#confirm-phrase-delete').showModal(); }
+async function removeEntry() {
+  const entry = currentEntry(), session = state.session;
+  if (blocked() || choosing || !entry) return;
+  busy = true; actionButtons();
+  try {
+    restore = { index: indexAfterRemoval(pages.selected, pages.total), q: $('#search').value, kind };
+    applyState(await call('Delete', session, entry.id)); toast('已移除这条记录');
+  } catch (err) { restore = null; toast(message(err)); }
+  finally { busy = false; render(); }
+}
+// Phrases hold text only, at most 64 KB; the editor opens prefilled so the
+// text can be trimmed before it is kept.
+const MAX_PHRASE_BYTES = 64 << 10;
+async function saveAsPhrase() {
+  if (blocked()) return;
+  if (draft) return openEditor();
+  const entry = currentEntry(), session = state.session; if (!entry) return;
+  if (entry.kind === 'image') { toast('图片不能存为常用语'); return; }
+  try {
+    const e = await details.get(`history:${session}:${entry.id}`, () => call('Detail', session, entry.id));
+    if (!e || session !== state.session || currentEntry()?.id !== entry.id || draft) return;
+    if (new TextEncoder().encode(e.text).length > MAX_PHRASE_BYTES) { toast('超过 64 KB，不能存为常用语'); return; }
+    openEditor({ id: '', text: e.text, original: e.text, saveAs: true });
+  } catch (err) { toast(message(err)); }
+}
+async function openLink() {
+  const entry = currentEntry(), session = state.session;
+  if (blocked() || choosing || !entry) return;
+  if (entry.kind !== 'link') { toast('只有链接可以打开'); return; }
+  try {
+    if (!demo) { await call('OpenLink', session, entry.id); return; }
+    const e = await details.get(`history:${session}:${entry.id}`, () => call('Detail', session, entry.id));
+    const url = e?.text.trim() || '';
+    if (/^https?:\/\//i.test(url)) window.open(url, '_blank', 'noopener,noreferrer'); else toast('只有链接可以打开');
+  } catch (err) { toast(message(err)); }
+}
+// Menu items and shortcuts share one dispatcher, so both behave the same.
+function perform(action) {
+  switch (action.type) {
+    case 'choose': choose(false); break;
+    case 'copy': choose(true); break;
+    case 'edit': editPhrase(); break;
+    case 'reorder': reorder(action.delta); break;
+    case 'save-phrase': saveAsPhrase(); break;
+    case 'open-link': openLink(); break;
+    case 'image-text': { const e = currentEntry(); if (e && imageTextReady === e.id) copyImageText(state.session, e.id); break; }
+    case 'delete': if (view === 'phrases') askDeletePhrase(); else removeEntry(); break;
+  }
+}
+function moreButton() {
+  const more = node('button', 'icon-button more-actions'); more.type = 'button';
+  more.title = `更多操作（${ctrlPlatform() ? 'Ctrl /' : '⌘/'}）`; more.setAttribute('aria-label', '更多操作'); more.setAttribute('aria-haspopup', 'menu');
+  more.append(icon('more')); more.onclick = toggleMenu;
+  return more;
+}
+function toggleMenu() {
+  const menu = $('#action-menu');
+  if (menu.open) { menu.close(); return; }
+  const entry = currentEntry(); if (!entry || blocked() || choosing) return;
+  const items = $('#action-menu-items'); items.replaceChildren();
+  for (const action of entryActions({ view, kind: entry.kind, imageText: imageTextReady === entry.id, index: pages.selected, total: pages.total, hasQuery: !!$('#search').value, ctrl: ctrlPlatform() })) {
+    if (action.danger) { const line = node('div', 'menu-separator'); line.setAttribute('role', 'separator'); items.append(line); }
+    const item = node('button', `menu-item${action.danger ? ' menu-danger' : ''}`); item.type = 'button'; item.setAttribute('role', 'menuitem');
+    item.append(node('span', '', action.label)); if (action.shortcut) item.append(node('kbd', '', action.shortcut));
+    item.onclick = () => { menu.close(); perform(action); };
+    // Like a native menu, one highlight follows both the pointer and the arrows.
+    item.addEventListener('pointermove', () => { if (document.activeElement !== item) item.focus({ preventScroll: true }); });
+    items.append(item);
+  }
+  // Open above the ⋯ button, or above the preview row before it renders.
+  const anchor = ($('#preview-meta .more-actions') || $('#preview-meta')).getBoundingClientRect();
+  menu.style.right = `${Math.max(8, innerWidth - anchor.right)}px`; menu.style.bottom = `${Math.max(8, innerHeight - anchor.top + 6)}px`;
+  menuReturnFocus = document.activeElement;
+  menu.showModal(); items.querySelector('.menu-item')?.focus();
+}
+function moveMenuFocus(delta) {
+  const items = $$('#action-menu .menu-item'), current = items.indexOf(document.activeElement);
+  items[current < 0 ? 0 : Math.max(0, Math.min(items.length - 1, current + delta))]?.focus();
+}
+// An action that opens its own dialog (editor, delete confirmation) keeps focus.
+$('#action-menu').addEventListener('close', () => {
+  if (!$('dialog[open]') && menuReturnFocus?.isConnected) menuReturnFocus.focus({ preventScroll: true });
+  menuReturnFocus = null;
+});
 async function deletePhrase() {
   $('#confirm-phrase-delete').close();
   const index = pages.selected, entry = currentEntry(); if (!entry) return;
@@ -648,7 +743,7 @@ document.addEventListener('keydown', event => {
   // IME uses the legacy 229 key code, without closing its composition.
   if (event.key === 'Escape' && (event.isComposing || event.keyCode === 229)) { event.preventDefault(); return; }
   const typing = event.target.matches('input,textarea,select,[contenteditable=true]');
-  const action = keyAction(event, { demo, dialogOpen: !!$('dialog[open]'), busy, typing, atList: event.target === document.body || event.target === $('#list'), view, hasQuery: !!$('#search').value, hasSelection: pages.selected >= 0, count: pages.total });
+  const action = keyAction(event, { demo, dialogOpen: !!$('dialog[open]'), busy, typing, atList: event.target === document.body || event.target === $('#list'), view, hasQuery: !!$('#search').value, hasSelection: pages.selected >= 0, menuOpen: $('#action-menu').open, count: pages.total });
   if (!action) return;
   event.preventDefault();
   switch (action.type) {
@@ -662,13 +757,13 @@ document.addEventListener('keydown', event => {
     case 'dismiss': dismiss(); break;
     case 'search': $('#search').focus(); break;
     case 'settings': $('#settings').click(); break;
+    case 'menu': toggleMenu(); break;
+    case 'menu-move': moveMenuFocus(action.delta); break;
     case 'select': select(moveIndex(pages.selected, action.delta, pages.total)); if (!typing) $('#list').focus({ preventScroll: true }); break;
     case 'view': switchView(action.view); break;
-    case 'choose': choose(false); break;
     case 'number': choose(false, { index: action.index }); break;
     case 'new': newPhrase(); break;
-    case 'edit': editPhrase(); break;
-    case 'reorder': reorder(action.delta); break;
+    default: perform(action);
   }
 });
 const mq = matchMedia('(prefers-color-scheme:dark)');

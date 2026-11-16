@@ -8,7 +8,9 @@ import (
 	"github.com/egoist/mygo/plugins/updater"
 	"github.com/egoist/mygo/transfer"
 	"log"
+	"net/url"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -374,4 +376,38 @@ func (d *Desktop) CopyImageText(session uint64, id string) (PasteResult, error) 
 		return PasteResult{}, err
 	}
 	return d.deliver(e, true, session)
+}
+
+// OpenLink opens a link entry in the default browser, then hides the panel
+// without reactivating the source app, so the browser keeps focus. A failure
+// leaves the panel open to show the error.
+func (d *Desktop) OpenLink(session uint64, id string) error {
+	e, err := d.Detail(session, id)
+	if err != nil {
+		return err
+	}
+	target, err := linkTarget(e)
+	if err != nil {
+		return err
+	}
+	if err := mygo.Shell.OpenExternal(target); err != nil {
+		return err
+	}
+	mygo.RunOnMain(func() {
+		if session == d.session && d.win != nil && d.win.IsVisible() {
+			d.hide()
+		}
+	})
+	return nil
+}
+
+// linkTarget re-checks the scheme rather than trusting the kind, so only an
+// http(s) address ever reaches the system opener.
+func linkTarget(e Entry) (string, error) {
+	text := strings.TrimSpace(e.Text)
+	u, err := url.Parse(text)
+	if e.Kind != "link" || err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+		return "", errors.New("只有链接可以打开")
+	}
+	return text, nil
 }
