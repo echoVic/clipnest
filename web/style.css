@@ -77,6 +77,11 @@ dialog{padding:25px;border-radius:17px;border:1px solid var(--line);background:v
 #preferences .setting-row p{font-size:12px;line-height:1.65;margin:4px 0 0}
 #preferences .setting-row>p{margin:0}
 #preferences .setting-row select{min-width:180px;font-size:12px}
+#shortcut-groups .setting-row{padding:7px 0;border-top:0}
+#shortcut-groups .setting-row:first-of-type{padding-top:8px}
+#shortcut-groups .setting-row strong{font-weight:400}
+.shortcut-keys{display:flex;gap:5px;flex-shrink:0}
+.shortcut-keys kbd{font-size:11px;height:22px;min-width:24px;padding:0 7px;color:var(--ink)}
 #preferences .secondary,#preferences .danger{font-size:12px;min-height:30px;background:var(--surface);white-space:nowrap}
 #preferences .danger{color:var(--danger)}
 #preferences a{font-size:12px;color:var(--accent-strong);text-decoration:none;white-space:nowrap}

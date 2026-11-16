@@ -1,6 +1,7 @@
 import { moveIndex, indexAfterRemoval, WheelSelection } from './selection.js';
 import { keyAction } from './keys.js';
 import { entryActions } from './actions.js';
+import { ctrlKeys, renderShortcutGroups } from './shortcuts.js';
 import { createDemo } from './demo.js';
 import { DetailCache, DeferredPreview, PagedList, PAGE_SIZE, ScrollRenderQueue, virtualRange, scrollForIndex, acceptPanel, panelReadError, updateSelection, characterCount } from './responsiveness.js';
 import { looksLikeMarkdown, renderMarkdown } from './markdown.js';
@@ -217,18 +218,16 @@ let platformHintsApplied = false;
 function adaptPlatformHints() {
   if (platformHintsApplied || !ctrlPlatform()) return;
   platformHintsApplied = true;
-  const glyphs = { '⌘': 'Ctrl', '⌥': 'Alt', '⇧': 'Shift' };
-  const map = text => text.replace(/[⌘⌥⇧]/g, ch => ` ${glyphs[ch]} `).replace(/\s+/g, ' ').trim();
   document.querySelectorAll('kbd').forEach(el => {
     // The summon hints reflect the shortcut actually registered by the app,
     // which on IME-enabled Windows is Ctrl+Alt+V rather than Ctrl+Shift+V.
     if (el.closest('#reopen')) { el.textContent = state.shortcut; return; }
-    el.textContent = map(el.textContent);
+    el.textContent = ctrlKeys(el.textContent);
   });
   const emptyHint = document.querySelector('#empty p strong');
   if (emptyHint) emptyHint.textContent = state.shortcut;
   // Titles read 「偏好设置（⌘,）」, so keep the bracket tight: 「偏好设置（Ctrl ,）」.
-  document.querySelectorAll('[title]').forEach(el => { if (/[⌘⌥⇧]/.test(el.title)) el.title = map(el.title).replace(/（ /g, '（'); });
+  document.querySelectorAll('[title]').forEach(el => { if (/[⌘⌥⇧]/.test(el.title)) el.title = ctrlKeys(el.title).replace(/（ /g, '（'); });
 }
 function applyState(next, reopen = false) {
   if (!acceptPanel(state, next)) return;
@@ -660,6 +659,20 @@ const pauseRecording = async () => {
 $('#pause').onclick = $('#record-pause').onchange = pauseRecording;
 preferencesTabs($('#preferences'));
 const exclusions = preferencesExclusions(document, { call, demo });
+// The demo lists the same keys as the native preferences window.
+let shortcutsShown = false;
+async function showShortcuts() {
+  if (shortcutsShown) return;
+  shortcutsShown = true;
+  try {
+    const response = await fetch(new URL('shortcuts.json', import.meta.url));
+    if (!response.ok) throw Error(`HTTP ${response.status}`);
+    renderShortcutGroups($('#shortcut-groups'), await response.json(), ctrlPlatform());
+  } catch {
+    shortcutsShown = false;
+    $('#shortcut-groups').textContent = '快捷键列表加载失败，重新打开偏好设置再试。';
+  }
+}
 $('#settings').onclick = async () => {
   if (busy) return;
   if (!demo) {
@@ -667,6 +680,7 @@ $('#settings').onclick = async () => {
     return;
   }
   $('#preferences').showModal();
+  showShortcuts();
   await exclusions.refresh();
   try { state.accessible = await call('Permission'); state.clipboardAccess = await call('ClipboardPermission'); header(); }
   catch (e) { toast(message(e)); }
