@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -15,6 +16,10 @@ import (
 
 const databaseName = "clipnest.sqlite3"
 const databaseAppID = 0x434c504e
+
+// schemaVersion is the user_version of a current database. Opening an older
+// one upgrades it step by step; a newer one is refused.
+const schemaVersion = 6
 
 // sqliteFileURI turns an OS filesystem path into a SQLite file URI. A bare
 // Windows "C:\…" path otherwise parses as an "C:" authority and fails; the
@@ -64,7 +69,7 @@ func openSQLite(path string, create bool) (*sqliteStore, error) {
 		err = s.transaction(func(tx *sql.Tx) error {
 			_, err := tx.Exec(`
 				PRAGMA application_id = 1129074766;
-				PRAGMA user_version = 5;
+				PRAGMA user_version = ` + strconv.Itoa(schemaVersion) + `;
 				CREATE TABLE history (
 					id TEXT PRIMARY KEY, position INTEGER NOT NULL,
 					search_id INTEGER NOT NULL,
@@ -89,7 +94,8 @@ func openSQLite(path string, create bool) (*sqliteStore, error) {
 					id INTEGER PRIMARY KEY CHECK (id = 1),
 					paused INTEGER NOT NULL CHECK (paused IN (0, 1)),
 					max_mib INTEGER NOT NULL DEFAULT 512,
-					keep_days INTEGER NOT NULL DEFAULT 0, ` + imageTextEnabledColumn + `
+					keep_days INTEGER NOT NULL DEFAULT 0, ` + imageTextEnabledColumn + `,
+					` + maxEntriesColumn + `
 				);
 				INSERT INTO settings(id, paused) VALUES (1, 0);
 			` + searchSchema + imageTextSchema)
@@ -101,7 +107,7 @@ func openSQLite(path string, create bool) (*sqliteStore, error) {
 		if err == nil {
 			err = db.QueryRow("PRAGMA user_version").Scan(&version)
 		}
-		if err == nil && (appID != databaseAppID || (version < 1 || version > 5)) {
+		if err == nil && (appID != databaseAppID || (version < 1 || version > schemaVersion)) {
 			err = errors.New("不支持此数据库格式或版本")
 		}
 		if err == nil && version == 1 {
@@ -116,11 +122,14 @@ func openSQLite(path string, create bool) (*sqliteStore, error) {
 		if err == nil && version < 5 {
 			err = s.upgradeSecret()
 		}
+		if err == nil && version < 6 {
+			err = s.upgradeMaxEntries()
+		}
 	}
 	if err == nil {
 		var p RetentionPolicy
 		var imageText bool
-		err = db.QueryRow("SELECT max_mib, keep_days, ocr_enabled FROM settings WHERE id = 1").Scan(&p.MaxMiB, &p.KeepDays, &imageText)
+		err = db.QueryRow("SELECT max_mib, keep_days, max_entries, ocr_enabled FROM settings WHERE id = 1").Scan(&p.MaxMiB, &p.KeepDays, &p.MaxEntries, &imageText)
 		if err == nil {
 			err = p.validate()
 		}

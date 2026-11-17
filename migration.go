@@ -251,7 +251,7 @@ func (s *Storage) Status() StorageStatus {
 }
 
 func (s *Storage) statusLocked() StorageStatus {
-	p := RetentionPolicy{512, 0}
+	p := RetentionPolicy{MaxMiB: 512}
 	if s.History.db != nil {
 		p = *s.History.db.policy.Load()
 	}

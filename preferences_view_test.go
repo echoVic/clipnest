@@ -13,7 +13,7 @@ func settingsView() *preferencesView {
 	v.setState(PreferencesState{
 		Appearance: mygo.ThemeSystem, Platform: "darwin", ClipboardAccess: clipboardAsk,
 		Shortcut: "⌘ ⇧ V", Version: "0.1.5",
-		Storage: StorageStatus{Backend: "sqlite", Retention: RetentionPolicy{512, 0}},
+		Storage: StorageStatus{Backend: "sqlite", Retention: RetentionPolicy{MaxMiB: 512}},
 	})
 	return v
 }
@@ -57,7 +57,7 @@ func TestPreferencesSwitchingTabsRetainsUnsavedRetention(t *testing.T) {
 		t.Fatal("retention edit lost", v.maxMiB)
 	}
 	tt.Click("通用")
-	v.setState(PreferencesState{Appearance: mygo.ThemeDark, Storage: StorageStatus{Backend: "sqlite", Retention: RetentionPolicy{512, 0}}})
+	v.setState(PreferencesState{Appearance: mygo.ThemeDark, Storage: StorageStatus{Backend: "sqlite", Retention: RetentionPolicy{MaxMiB: 512}}})
 	tt.Frame()
 	tt.Click("存储")
 	if v.maxMiB != 128 || !v.retentionDirty {
@@ -279,5 +279,32 @@ func TestPreferencesShortcutsFollowThePlatform(t *testing.T) {
 		if strings.ContainsAny(text, "⌘⌥⇧") {
 			t.Fatalf("Windows shows a macOS glyph: %q", text)
 		}
+	}
+}
+
+func TestPreferencesRetentionSavesTheEntryCount(t *testing.T) {
+	v := settingsView()
+	v.tab = 2
+	v.state.Storage.Retention = RetentionPolicy{MaxMiB: 512, MaxEntries: 1000}
+	v.setState(v.state)
+	saved := []RetentionPolicy{}
+	v.actions.saveRetention = func(p RetentionPolicy) { saved = append(saved, p) }
+	tt := ui.NewTester(v.draw, 620, 900)
+	if v.maxEntries != 1000 {
+		t.Fatal("stored count not shown", v.maxEntries)
+	}
+	if err := tt.Click("最多保留条数"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Key(ui.Cmd, ui.KeyA)
+	tt.Type("200")
+	if v.maxEntries != 200 || !v.retentionDirty {
+		t.Fatal("count edit lost", v.maxEntries)
+	}
+	if err := tt.Click("保存并清理"); err != nil {
+		t.Fatal(err)
+	}
+	if len(saved) != 1 || saved[0] != (RetentionPolicy{MaxMiB: 512, MaxEntries: 200}) {
+		t.Fatal("count not saved", saved)
 	}
 }

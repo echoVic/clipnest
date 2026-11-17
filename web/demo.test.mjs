@@ -39,7 +39,7 @@ test('storage upgrade demo is opt-in and preserves sample content', async () => 
  assert.equal((await call('StorageStatus')).migrationAvailable, true);
  const readyAfter = readyState(demo);
  const after = await call('MigrateStorage');
- assert.deepEqual(after, { backend: 'sqlite', migrationAvailable: false, cleanupPending: false, retention: { maxMiB: 512, keepDays: 0 }, imageText: true });
+ assert.deepEqual(after, { backend: 'sqlite', migrationAvailable: false, cleanupPending: false, retention: { maxMiB: 512, keepDays: 0, maxEntries: 0 }, imageText: true });
  // Only the sample screenshot changes: its recognized text becomes the title.
  const migrated = (await readyAfter).entries;
  assert.deepEqual(migrated.map(e => e.id), before.entries.map(e => e.id));
@@ -107,7 +107,7 @@ test('retention is explicit, validates numbers, cleans immediately and exempts p
  const demo = createDemo({ legacyStorage: true, large: true });
  await assert.rejects(demo.call('SaveRetention', { maxMiB: 0, keepDays: 1 }), /迁移/);
  await demo.call('MigrateStorage');
- for (const policy of [{ maxMiB: -1, keepDays: 0 }, { maxMiB: 1.5, keepDays: 0 }, { maxMiB: 0, keepDays: NaN }]) {
+ for (const policy of [{ maxMiB: -1, keepDays: 0 }, { maxMiB: 1.5, keepDays: 0 }, { maxMiB: 0, keepDays: NaN }, { maxMiB: 0, keepDays: 0, maxEntries: -1 }, { maxMiB: 0, keepDays: 0, maxEntries: 1000001 }]) {
   await assert.rejects(demo.call('SaveRetention', policy));
  }
  const phrases = await demo.call('Phrases', '');
@@ -117,11 +117,27 @@ test('retention is explicit, validates numbers, cleans immediately and exempts p
  const state = await ready;
  assert.equal(state.session, loading.session);
  assert.ok(state.total < 10000 && state.total > 0);
- assert.deepEqual(state.storage.retention, { maxMiB: 0, keepDays: 1 });
+ assert.deepEqual(state.storage.retention, { maxMiB: 0, keepDays: 1, maxEntries: 0 });
  assert.deepEqual(await demo.call('Phrases', ''), phrases);
  const clearReady = readyState(demo);
  assert.equal((await demo.call('Clear')).loading, true);
  assert.equal((await clearReady).total, 0);
+});
+
+test('retention by count keeps the newest entries and exempts phrases', async () => {
+ const demo = createDemo();
+ const phrases = await demo.call('Phrases', '');
+ const opened = readyState(demo);
+ await demo.call('State');
+ const before = await opened;
+ const newest = before.entries.slice(0, 3).map(e => e.id);
+ const ready = readyState(demo);
+ await demo.call('SaveRetention', { maxMiB: 0, keepDays: 0, maxEntries: 3 });
+ const state = await ready;
+ assert.equal(state.total, 3);
+ assert.deepEqual(state.entries.map(e => e.id), newest);
+ assert.deepEqual(state.storage.retention, { maxMiB: 0, keepDays: 0, maxEntries: 3 });
+ assert.deepEqual(await demo.call('Phrases', ''), phrases);
 });
 
 test('mutation loading states are returned, while migration also publishes loading', async () => {

@@ -7,16 +7,31 @@ import (
 	"time"
 )
 
+// RetentionPolicy limits the history; 0 means no limit. All limits apply
+// together, and the oldest entries go first.
 type RetentionPolicy struct {
-	MaxMiB   int `json:"maxMiB"`
-	KeepDays int `json:"keepDays"`
+	MaxMiB     int `json:"maxMiB"`
+	KeepDays   int `json:"keepDays"`
+	MaxEntries int `json:"maxEntries"`
 }
 
+const maxRetainedEntries = 1000000
+
 func (p RetentionPolicy) validate() error {
-	if p.MaxMiB < 0 || p.MaxMiB > 1<<20 || p.KeepDays < 0 || p.KeepDays > 36500 {
-		return errors.New("容量须为 0–1048576 MiB，保留天数须为 0–36500；0 表示不限")
+	if p.MaxMiB < 0 || p.MaxMiB > 1<<20 || p.KeepDays < 0 || p.KeepDays > 36500 ||
+		p.MaxEntries < 0 || p.MaxEntries > maxRetainedEntries {
+		return errors.New("容量须为 0–1048576 MiB，保留天数须为 0–36500，条数须为 0–1000000；0 表示不限")
 	}
 	return nil
+}
+
+const maxEntriesColumn = "max_entries INTEGER NOT NULL DEFAULT 0"
+
+func (s *sqliteStore) upgradeMaxEntries() error {
+	return s.transaction(func(tx *sql.Tx) error {
+		_, err := tx.Exec("ALTER TABLE settings ADD COLUMN " + maxEntriesColumn + "; PRAGMA user_version=6")
+		return err
+	})
 }
 
 // Only live, published databases use WAL. Staging remains a single file.
@@ -129,7 +144,7 @@ func (s *sqliteStore) apply(changes []historyChange, paused bool, policy *Retent
 		p := *s.policy.Load()
 		if policy != nil {
 			p = *policy
-			if _, err := tx.Exec("UPDATE settings SET max_mib=?,keep_days=? WHERE id=1", p.MaxMiB, p.KeepDays); err != nil {
+			if _, err := tx.Exec("UPDATE settings SET max_mib=?,keep_days=?,max_entries=? WHERE id=1", p.MaxMiB, p.KeepDays, p.MaxEntries); err != nil {
 				return err
 			}
 		}
@@ -157,6 +172,18 @@ func pruneSQL(tx *sql.Tx, p RetentionPolicy, now time.Time) (bool, error) {
 			return false, err
 		}
 		removed = n > 0
+	}
+	if p.MaxEntries > 0 {
+		// Position grows toward older entries; keep the newest MaxEntries.
+		result, err := tx.Exec("DELETE FROM history WHERE id IN (SELECT id FROM history ORDER BY position LIMIT -1 OFFSET ?)", p.MaxEntries)
+		if err != nil {
+			return false, err
+		}
+		n, err := result.RowsAffected()
+		if err != nil {
+			return false, err
+		}
+		removed = removed || n > 0
 	}
 	if p.MaxMiB > 0 {
 		var total int64

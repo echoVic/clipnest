@@ -112,6 +112,7 @@
         <fieldset id="retention-fields" class="retention-fields" disabled aria-label="历史保留策略" aria-describedby="retention-note retention-legacy">
           <label for="retention-size">历史内容容量(MiB)<input id="retention-size" type="number" min="0" max="1048576" step="1" value="512" required></label>
           <label for="retention-days">保留天数<input id="retention-days" type="number" min="0" max="36500" step="1" value="0" required></label>
+          <label for="retention-count">最多保留条数<input id="retention-count" type="number" min="0" max="1000000" step="1" value="0" required></label>
         </fieldset>
         <div class="setting-row retention-action"><div><p id="retention-note">0 表示不限。保存后从最旧的历史开始清理，常用语始终保留。</p><p id="retention-legacy" hidden>请先迁移到 SQLite，再设置保留策略。</p><p id="retention-error" class="field-error" role="alert" hidden></p></div><button id="retention-save" type="button" class="secondary" disabled>保存并清理</button></div>
       </section>

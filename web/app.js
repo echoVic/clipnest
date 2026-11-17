@@ -160,11 +160,12 @@ function storagePrompt() {
   if (!retentionDirty) {
     $('#retention-size').value = storage?.retention?.maxMiB ?? 512;
     $('#retention-days').value = storage?.retention?.keepDays ?? 0;
+    $('#retention-count').value = storage?.retention?.maxEntries ?? 0;
   }
 }
 async function saveRetention() {
   if (busy || state.storage?.backend !== 'sqlite') return;
-  const inputs = [$('#retention-size'), $('#retention-days')];
+  const inputs = [$('#retention-size'), $('#retention-days'), $('#retention-count')];
   const values = inputs.map(input => input.valueAsNumber);
   if (inputs.some(input => !input.checkValidity()) || values.some(value => !Number.isSafeInteger(value) || value < 0)) {
     $('#retention-error').textContent = '请输入 0 或正整数。';
@@ -172,7 +173,7 @@ async function saveRetention() {
   }
   busy = savingRetention = true; $('#retention-error').hidden = true; storagePrompt(); actionButtons();
   try {
-    const next = await call('SaveRetention', { maxMiB: values[0], keepDays: values[1] });
+    const next = await call('SaveRetention', { maxMiB: values[0], keepDays: values[1], maxEntries: values[2] });
     retentionDirty = false; applyState(next); toast('已保存并清理历史，常用语不受影响');
   } catch (err) {
     $('#retention-error').textContent = message(err); $('#retention-error').hidden = false;
@@ -767,7 +768,7 @@ $('#clipboard-dialog-settings').onclick = async () => {
 $('#migrate-storage').onclick = $('#migrate-settings').onclick = migrateStorage;
 $('#image-text-toggle').onchange = setImageText;
 $('#retention-save').onclick = saveRetention;
-for (const input of [$('#retention-size'), $('#retention-days')]) input.oninput = () => { retentionDirty = true; $('#retention-error').hidden = true; };
+for (const input of [$('#retention-size'), $('#retention-days'), $('#retention-count')]) input.oninput = () => { retentionDirty = true; $('#retention-error').hidden = true; };
 $('#migration-later').onclick = () => { migrationDismissed = true; storagePrompt(); $('#list').focus({ preventScroll: true }); };
 $$('.close-dialog').forEach(b => b.onclick = () => b.closest('dialog').close());
 $$('dialog').forEach(d => d.addEventListener('click', e => { const r = d.getBoundingClientRect(); if (e.target === d && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) d === $('#phrase-editor') ? cancelEditor() : d.close(); }));

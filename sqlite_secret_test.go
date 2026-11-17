@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -27,15 +28,15 @@ func TestSecretColumnOnNewAndUpgradedDatabases(t *testing.T) {
 		t.Fatal(err)
 	}
 	var version int
-	if err := s.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != 5 {
-		t.Fatal("new database is not version 5", version, err)
+	if err := s.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != schemaVersion {
+		t.Fatal("new database is not the current version", version, err)
 	}
 	var label string
 	if err := s.db.QueryRow("SELECT secret FROM history WHERE id=?", secret.ID).Scan(&label); err != nil || label != "AWS 访问密钥" {
 		t.Fatal("secret type not stored", label, err)
 	}
 	// Reduce the database to the actual v4 schema, then reopen it.
-	if _, err := s.db.Exec("ALTER TABLE history DROP COLUMN secret; PRAGMA user_version=4"); err != nil {
+	if _, err := s.db.Exec("ALTER TABLE history DROP COLUMN secret; ALTER TABLE settings DROP COLUMN max_entries; PRAGMA user_version=4"); err != nil {
 		t.Fatal(err)
 	}
 	s.db.Close()
@@ -44,7 +45,7 @@ func TestSecretColumnOnNewAndUpgradedDatabases(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.db.Close()
-	if err := s.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != 5 {
+	if err := s.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != schemaVersion {
 		t.Fatal("v4 database not upgraded", version, err)
 	}
 	var n int
@@ -53,7 +54,7 @@ func TestSecretColumnOnNewAndUpgradedDatabases(t *testing.T) {
 	}
 	s.db.Close()
 	s, _ = openSQLite(path, false)
-	if _, err := s.db.Exec("PRAGMA user_version=6"); err != nil {
+	if _, err := s.db.Exec("PRAGMA user_version=" + strconv.Itoa(schemaVersion+1)); err != nil {
 		t.Fatal(err)
 	}
 	s.db.Close()

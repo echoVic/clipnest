@@ -60,7 +60,7 @@ export function createDemo({ version = '开发版', accessible = true, legacySto
   });
   let session = 0, revision = 0, paused = false, loading = false, readyTimer;
   const listeners = new Set();
-  let storage = { backend: legacyStorage ? 'json' : 'sqlite', migrationAvailable: legacyStorage, cleanupPending: false, retention: { maxMiB: 512, keepDays: 0 }, imageText: !legacyStorage };
+  let storage = { backend: legacyStorage ? 'json' : 'sqlite', migrationAvailable: legacyStorage, cleanupPending: false, retention: { maxMiB: 512, keepDays: 0, maxEntries: 0 }, imageText: !legacyStorage };
   // Like the desktop, recognized text titles and matches an image only while
   // the feature is on and the history is in SQLite.
   const recognized = e => e.kind === 'image' && storage.backend === 'sqlite' && storage.imageText;
@@ -126,10 +126,12 @@ export function createDemo({ version = '开发版', accessible = true, legacySto
         return status();
       case 'SaveRetention': {
         if (storage.backend !== 'sqlite') throw Error('请先迁移到 SQLite');
-        const { maxMiB, keepDays } = args[0];
-        if (![maxMiB, keepDays].every(n => Number.isSafeInteger(n) && n >= 0)) throw Error('请输入非负整数');
-        storage.retention = { maxMiB, keepDays };
+        // A missing count is no limit, as in the app.
+        const { maxMiB, keepDays, maxEntries = 0 } = args[0];
+        if (![maxMiB, keepDays, maxEntries].every(n => Number.isSafeInteger(n) && n >= 0) || maxEntries > 1000000) throw Error('请输入非负整数');
+        storage.retention = { maxMiB, keepDays, maxEntries };
         if (keepDays) entries = entries.filter(e => e.created >= Date.now() - keepDays * 86400000);
+        if (maxEntries) entries = entries.slice(0, maxEntries);
         if (maxMiB) {
           const encoder = new TextEncoder();
           let size = 0;

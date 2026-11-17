@@ -42,7 +42,7 @@ async function app(t, permissionState = {}, appearance = {}) {
   };
   const filters = ['all', 'text', 'link'].map(kind => Object.assign(new Element(), { dataset: { kind } }));
   const views = ['history', 'phrases'].map(view => Object.assign(new Element(), { dataset: { view } }));
-  const state = () => ({ session, loading: false, paused: false, total: 100, entries: page().entries, accessible: true, version: '0.1.5', platform: 'demo', clipboardAccess: 'allowed', storage: { backend: 'sqlite', retention: { maxMiB: 512, keepDays: 0 } }, ...permissionState });
+  const state = () => ({ session, loading: false, paused: false, total: 100, entries: page().entries, accessible: true, version: '0.1.5', platform: 'demo', clipboardAccess: 'allowed', storage: { backend: 'sqlite', retention: { maxMiB: 512, keepDays: 0, maxEntries: 0 } }, ...permissionState });
   const bridge = {
     preferences: {},
     on: (event, fn) => events.set(event, fn),

@@ -39,6 +39,7 @@ type preferencesView struct {
 	failed            bool
 	maxMiB            float64
 	keepDays          float64
+	maxEntries        float64
 	retentionDirty    bool
 	confirmClear      bool
 	ignoreDraft       string
@@ -47,7 +48,8 @@ type preferencesView struct {
 func (v *preferencesView) setState(s PreferencesState) {
 	v.state = s
 	if !v.retentionDirty {
-		v.maxMiB, v.keepDays = float64(s.Storage.Retention.MaxMiB), float64(s.Storage.Retention.KeepDays)
+		r := s.Storage.Retention
+		v.maxMiB, v.keepDays, v.maxEntries = float64(r.MaxMiB), float64(r.KeepDays), float64(r.MaxEntries)
 	}
 	if rule := strings.TrimSpace(v.ignoreDraft); rule != "" && slices.Contains(s.Privacy.Ignore, rule) {
 		v.ignoreDraft = ""
@@ -394,6 +396,11 @@ func (v *preferencesView) storage(c *ui.Context) {
 				v.retentionDirty = true
 			}
 		})
+		v.row(c, "最多保留条数", "", func() {
+			if ui.NumberInput(c, &v.maxEntries, 0, maxRetainedEntries, 1).Width(180).Justify(ui.End).Disabled(v.state.Storage.Backend != "sqlite").Changed() {
+				v.retentionDirty = true
+			}
+		})
 		ui.Row(c).FillWidth().Height(1).Background(c.Theme().Border)
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(18).Children(func() {
 			note := "0 表示不限。保存后从最旧的历史开始清理，常用语始终保留。"
@@ -422,12 +429,12 @@ func (v *preferencesView) storage(c *ui.Context) {
 }
 
 func (v *preferencesView) retentionPolicy() (RetentionPolicy, error) {
-	for _, value := range []float64{v.maxMiB, v.keepDays} {
+	for _, value := range []float64{v.maxMiB, v.keepDays, v.maxEntries} {
 		if math.IsNaN(value) || math.IsInf(value, 0) || value < 0 || value != math.Trunc(value) || value > 1<<20 {
 			return RetentionPolicy{}, errors.New("请输入 0 或正整数")
 		}
 	}
-	p := RetentionPolicy{int(v.maxMiB), int(v.keepDays)}
+	p := RetentionPolicy{MaxMiB: int(v.maxMiB), KeepDays: int(v.keepDays), MaxEntries: int(v.maxEntries)}
 	return p, p.validate()
 }
 

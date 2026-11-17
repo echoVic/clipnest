@@ -99,9 +99,14 @@ export interface PrivacySettings {
   ignore: string[];
 }
 
+/**
+ * RetentionPolicy limits the history; 0 means no limit. All limits apply
+ * together, and the oldest entries go first.
+ */
 export interface RetentionPolicy {
   maxMiB: number;
   keepDays: number;
+  maxEntries: number;
 }
 
 export interface StorageStatus {

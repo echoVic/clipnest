@@ -68,8 +68,8 @@ func TestImageTextSchemaQueuesImagesOnNewAndUpgradedDatabases(t *testing.T) {
 		t.Fatal(err)
 	}
 	var version, enabled int
-	if err := s.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != 5 {
-		t.Fatal("new database is not version 5", version, err)
+	if err := s.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != schemaVersion {
+		t.Fatal("new database is not the current version", version, err)
 	}
 	if err := s.db.QueryRow("SELECT ocr_enabled FROM settings").Scan(&enabled); err != nil || enabled != 1 {
 		t.Fatal("image text must be enabled by default", enabled, err)
@@ -80,7 +80,7 @@ func TestImageTextSchemaQueuesImagesOnNewAndUpgradedDatabases(t *testing.T) {
 	// Reduce the database to the actual v3 schema, then reopen it.
 	_, err = s.db.Exec(`DROP INDEX history_ocr_queue; DROP TABLE history_ocr;
 		ALTER TABLE history DROP COLUMN ocr_state; ALTER TABLE settings DROP COLUMN ocr_enabled;
-		ALTER TABLE history DROP COLUMN secret; PRAGMA user_version=3`)
+		ALTER TABLE history DROP COLUMN secret; ALTER TABLE settings DROP COLUMN max_entries; PRAGMA user_version=3`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func TestImageTextSchemaQueuesImagesOnNewAndUpgradedDatabases(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.db.Close()
-	if err := s.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != 5 {
+	if err := s.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != schemaVersion {
 		t.Fatal("v3 database not upgraded", version, err)
 	}
 	if err := s.db.QueryRow("SELECT ocr_enabled FROM settings").Scan(&enabled); err != nil || enabled != 1 {
@@ -377,7 +377,7 @@ func TestImageTextDiscardsResultsForRemovedOrDisabledImages(t *testing.T) {
 					s.History.Clear()
 					err = s.History.Save()
 				case "expire":
-					err = s.History.SetRetention(RetentionPolicy{0, 1})
+					err = s.History.SetRetention(RetentionPolicy{KeepDays: 1})
 				case "disable":
 					err = s.History.SetImageText(false)
 				}

@@ -154,7 +154,7 @@ func TestRetentionPolicyAgeBudgetAndPersistence(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if s.Status().Retention != (RetentionPolicy{1, 1}) {
+	if s.Status().Retention != (RetentionPolicy{MaxMiB: 1, KeepDays: 1}) {
 		t.Fatal("policy did not persist")
 	}
 	if err := s.History.SetRetention(RetentionPolicy{}); err != nil {
@@ -304,10 +304,10 @@ func TestRetentionFailureRollsBackSettingsAndDeletion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.History.SetRetention(RetentionPolicy{0, 1}); err == nil {
+	if err := s.History.SetRetention(RetentionPolicy{KeepDays: 1}); err == nil {
 		t.Fatal("cleanup failure hidden")
 	}
-	if s.Status().Retention != (RetentionPolicy{512, 0}) {
+	if s.Status().Retention != (RetentionPolicy{MaxMiB: 512}) {
 		t.Fatal("memory policy changed on failure")
 	}
 	var days, count int
@@ -325,7 +325,7 @@ func TestRelaxingRetentionIncludesPendingCopies(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if err := s.History.SetRetention(RetentionPolicy{1, 0}); err != nil {
+	if err := s.History.SetRetention(RetentionPolicy{MaxMiB: 1}); err != nil {
 		t.Fatal(err)
 	}
 	for i := 0; i < 2; i++ {
