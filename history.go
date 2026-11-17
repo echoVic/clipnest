@@ -38,6 +38,8 @@ type Entry struct {
 	Height         int            `json:"height,omitempty"`
 	ImageText      string         `json:"imageText,omitempty"`      // detail only
 	ImageTextState ImageTextState `json:"imageTextState,omitempty"` // detail only, images
+	Secret         string         `json:"secret,omitempty"`         // type of the first secret; title, excerpt and search are masked
+	Masked         string         `json:"masked,omitempty"`         // detail only: the text with its secrets masked
 	searchText     string         // immutable derived search representation; never persisted
 }
 
@@ -69,8 +71,7 @@ func newEntry(text string, png []byte, source string) (Entry, error) {
 		if strings.Contains(text, "\n") && (strings.Contains(text, "function ") || strings.Contains(text, "const ") || strings.Contains(text, "func ") || strings.Contains(text, "import ") || json.Valid([]byte(text))) {
 			e.Kind = "code"
 		}
-		e.Title = shorten(strings.Split(strings.TrimSpace(text), "\n")[0], 80)
-		e.Excerpt = shorten(strings.Join(strings.Fields(text), " "), 140)
+		e.Title, e.Excerpt = textTitles(text)
 		payload = []byte(text)
 	}
 	h := sha256.New()
@@ -79,6 +80,11 @@ func newEntry(text string, png []byte, source string) (Entry, error) {
 	e.ID = hex.EncodeToString(h.Sum(nil))
 	e.searchText = prepareSearch(e)
 	return e, nil
+}
+
+// textTitles derives a text entry's title (its first line) and excerpt.
+func textTitles(text string) (string, string) {
+	return shorten(strings.Split(strings.TrimSpace(text), "\n")[0], 80), shorten(strings.Join(strings.Fields(text), " "), 140)
 }
 
 func shorten(s string, n int) string {
@@ -90,7 +96,7 @@ func shorten(s string, n int) string {
 }
 func (e Entry) size() int { return len(e.Text) + len(e.Image) }
 func (e Entry) summary() Entry {
-	e.Text, e.Image, e.ImageText, e.ImageTextState, e.searchText = "", nil, "", "", ""
+	e.Text, e.Image, e.ImageText, e.ImageTextState, e.Masked, e.searchText = "", nil, "", "", "", ""
 	return e
 }
 
