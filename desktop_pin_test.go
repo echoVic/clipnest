@@ -46,3 +46,45 @@ func TestTrackedTargetKeepsTheLastOtherApp(t *testing.T) {
 		t.Errorf("no target became %v", got)
 	}
 }
+
+func TestLocateFollowsSearchAndFilter(t *testing.T) {
+	// Newest first: four, three (a link), two, one.
+	v := sequenceView(t, "one", "two", "https://example.com/three", "four")
+	page, err := v.Page("", "", 0, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	one, three := page.Entries[3].ID, page.Entries[1].ID
+	for _, c := range []struct {
+		q, kind, id string
+		want        int
+	}{
+		{"", "", one, 3},
+		{"", "all", three, 1},
+		{"", "text", one, 2},
+		{"o", "text", one, 2},
+		{"", "link", one, -1},
+		{"", "", "missing", -1},
+		{"", "", "", -1},
+	} {
+		if got, err := v.Locate(c.q, c.kind, c.id); err != nil || got != c.want {
+			t.Errorf("Locate(%q, %q, %q) = %d, %v; want %d", c.q, c.kind, c.id, got, err, c.want)
+		}
+	}
+}
+
+func TestLocateStopsAtTheLimit(t *testing.T) {
+	v := sequenceView(t, "one", "two", "three")
+	page, _ := v.Page("", "", 0, 50)
+	defer func(limit int) { locateLimit = limit }(locateLimit)
+	locateLimit = 2
+	if got, _ := v.Locate("", "", page.Entries[1].ID); got != 1 {
+		t.Errorf("within the limit: %d", got)
+	}
+	if got, _ := v.Locate("", "", page.Entries[2].ID); got != -1 {
+		t.Errorf("past the limit: %d", got)
+	}
+	if _, err := v.Locate("", "nonsense", page.Entries[0].ID); err == nil {
+		t.Error("an invalid kind was accepted")
+	}
+}

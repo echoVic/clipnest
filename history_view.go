@@ -244,3 +244,27 @@ func (v *historyView) Detail(id string) (Entry, error) {
 	imageTextDetail(&e, state, imageText, enabled)
 	return e, nil
 }
+
+// locateLimit bounds how far Locate reads; a variable so tests can lower it.
+var locateLimit = 1000
+
+// Locate returns where the entry id sits in the list for q and kind, or -1
+// when it is not within the first locateLimit entries.
+func (v *historyView) Locate(q, kind, id string) (int, error) {
+	for offset := 0; offset < locateLimit; {
+		page, err := v.Page(q, kind, offset, min(200, locateLimit-offset))
+		if err != nil {
+			return -1, err
+		}
+		for i, e := range page.Entries {
+			if e.ID == id {
+				return offset + i, nil
+			}
+		}
+		offset += len(page.Entries)
+		if len(page.Entries) == 0 || offset >= page.Total {
+			break
+		}
+	}
+	return -1, nil
+}
