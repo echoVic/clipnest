@@ -1,5 +1,12 @@
 package main
 
+import (
+	"context"
+	"strings"
+
+	"github.com/egoist/mygo"
+)
+
 // hideOnBlur reports whether the panel hides when it loses the keyboard. A
 // pinned panel stays, as does one busy pasting or guiding a permission.
 func hideOnBlur(busy, permission, pinned bool) bool {
@@ -34,4 +41,75 @@ func trackedTarget(current, front targetApp) targetApp {
 		return current
 	}
 	return front
+}
+
+// historyChanged tells a showing panel, by session, that its snapshot is
+// behind. The panel asks for Reload when nothing holds the old snapshot.
+var historyChanged = mygo.NewEvent[uint64]("clipnest:history-changed")
+
+func (d *Desktop) announceHistory() {
+	if !d.quitting && d.win != nil && d.win.IsVisible() {
+		_ = historyChanged.Broadcast(d.session)
+	}
+}
+
+// PanelReload is a panel with a new snapshot and where the selected entry is
+// in it, -1 when it is gone or none was given.
+type PanelReload struct {
+	State PanelState `json:"state"`
+	Index int        `json:"index"`
+}
+
+// Reload swaps a showing panel's snapshot for a new one. The new snapshot is
+// opened and read in the background while the old one keeps serving the
+// panel; only the swap runs on main. It does not broadcast: the panel takes
+// a broadcast of a new session as reopening and clears its search.
+func (d *Desktop) Reload(session uint64, q, kind, id string) (r PanelReload, err error) {
+	r.Index = -1
+	ready := false
+	mygo.RunOnMain(func() {
+		ready = session == d.session && d.win != nil && d.win.IsVisible() && !d.busy && !d.quitting && d.view != nil
+		if !ready {
+			r.State = d.snapshot()
+		}
+	})
+	if !ready {
+		return r, nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	v, loadErr := d.h.openView(ctx)
+	var page HistoryPage
+	if loadErr == nil {
+		page, loadErr = v.Page("", "", 0, historyPageSize)
+	}
+	index := -1
+	if loadErr == nil && id != "" {
+		// A failed lookup only loses the selection; the panel falls back to
+		// the old position.
+		if found, err := v.Locate(q, kind, id); err == nil {
+			index = found
+		}
+	}
+	mygo.RunOnMain(func() {
+		if loadErr != nil || session != d.session || !d.win.IsVisible() || d.busy || d.quitting {
+			cancel()
+			if v != nil {
+				go v.Close()
+			}
+			if loadErr != nil {
+				d.notice = "历史无法读取：" + loadErr.Error()
+			}
+			r.State = d.snapshot()
+			return
+		}
+		d.closeView()
+		d.session++
+		d.view, d.cancelView = v, cancel
+		d.entries, d.total, d.loading = page.Entries, page.Total, false
+		if strings.HasPrefix(d.notice, "历史无法读取：") {
+			d.notice = ""
+		}
+		r.State, r.Index = d.snapshot(), index
+	})
+	return r, nil
 }

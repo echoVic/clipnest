@@ -145,13 +145,18 @@ func reportFailure(failed *bool, err error) bool {
 	return was || *failed
 }
 
-func (d *Desktop) capture() { d.captureWith(systemClipboard{d.n, mygo.Clipboard}) }
+func (d *Desktop) capture() {
+	if d.captureWith(systemClipboard{d.n, mygo.Clipboard}) {
+		d.announceHistory()
+	}
+}
 
 // captureWith is capture with the clipboard as a parameter, so tests can
 // substitute it. A capture without an error, recorded or not, is a success.
-func (d *Desktop) captureWith(c clipboardReader) {
+// It reports whether it recorded a new entry.
+func (d *Desktop) captureWith(c clipboardReader) bool {
 	before := d.clipboardAccess
-	_, err := d.captureFrom(c, false)
+	captured, err := d.captureFrom(c, false)
 	// A changed banner has already been broadcast, with the policy in it.
 	if !d.showFailure(captureFailedNotice, err != nil) && before != d.clipboardAccess && d.win != nil && d.win.IsVisible() {
 		_ = panelChanged.Broadcast(d.snapshot())
@@ -159,6 +164,7 @@ func (d *Desktop) captureWith(c clipboardReader) {
 	if before != d.clipboardAccess && d.preferences != nil {
 		d.preferences.refresh()
 	}
+	return captured
 }
 
 // Only an explicit permission action may read while the OS would ask.
@@ -324,9 +330,15 @@ func (d *Desktop) monitor() {
 				mygo.RunOnMain(func() { d.showFailure(saveFailedNotice, failed) })
 			}
 		case <-cleanup.C:
-			if reportFailure(&cleanupFailed, d.h.Cleanup()) {
+			err := d.h.Cleanup()
+			if reportFailure(&cleanupFailed, err) {
 				failed := cleanupFailed
 				mygo.RunOnMain(func() { d.showFailure(cleanupFailedNotice, failed) })
+			}
+			// Cleanup does not say whether it removed anything; one extra
+			// reload an hour costs nothing.
+			if err == nil {
+				mygo.RunOnMain(d.announceHistory)
 			}
 		}
 	}
