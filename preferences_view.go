@@ -24,6 +24,7 @@ type preferencesActions struct {
 	migrate           func()
 	saveRetention     func(RetentionPolicy)
 	clear             func()
+	openAtLogin       func(bool)
 	update            func()
 	close             func()
 }
@@ -159,6 +160,14 @@ func (v *preferencesView) general(c *ui.Context) {
 						v.actions.appearance(source)
 					}
 				}
+			}
+		})
+		ui.Row(c).FillWidth().Height(1).Background(c.Theme().Border)
+		// The field's label names the switch and toggles it when clicked.
+		v.row(c, "登录时打开 Clipnest", "在后台运行，不弹出面板，用快捷键唤起。", func() {
+			on := v.state.OpenAtLogin
+			if ui.Switch(c, &on).Disabled(v.actions.openAtLogin == nil).Changed() {
+				v.actions.openAtLogin(on)
 			}
 		})
 	})

@@ -22,6 +22,9 @@ type PreferencesState struct {
 	Version         string           `json:"version"`
 	ExcludedApps    []ExcludedApp    `json:"excludedApps"`
 	Privacy         PrivacySettings  `json:"privacy"`
+	// OpenAtLogin is the system's state, which the user can also change in
+	// System Settings or Task Manager.
+	OpenAtLogin bool `json:"openAtLogin"`
 }
 
 type preferencesWindow struct {
@@ -118,7 +121,7 @@ func (d *Desktop) preferencesState() PreferencesState {
 		ClipboardAccess: d.clipboardAccess, Shortcut: d.shortcut, Storage: d.StorageStatus(),
 		ShortcutNotice: d.shortcutNotice,
 		Platform:       runtime.GOOS, Version: applicationVersion(), ExcludedApps: d.ExcludedApps(),
-		Privacy: d.Privacy(),
+		Privacy: d.Privacy(), OpenAtLogin: mygo.App.OpenAtLogin(),
 	}
 }
 
@@ -185,6 +188,13 @@ func newPreferencesWindow(d *Desktop) *preferencesWindow {
 		},
 		clear: func() {
 			p.run(func() error { _, err := d.Clear(); return err }, "复制历史已清空，常用语已保留", false)
+		},
+		openAtLogin: func(on bool) {
+			success := "已关闭登录时打开"
+			if on {
+				success = "下次登录时，Clipnest 会在后台打开"
+			}
+			p.run(func() error { return d.setOpenAtLogin(on) }, success, false)
 		},
 		update: d.CheckForUpdates,
 		close: func() {
