@@ -24,6 +24,8 @@ A keyboard-first clipboard history panel for macOS and Windows. Copy as usual an
 - SQLite storage with no limit on the number of entries; history is trimmed by capacity (512 MiB by default) and by days kept. Snippets are stored separately, up to 500.
 - Search text, titles and source apps, filtered by text, link, code or image; on macOS, text recognized by the system Vision framework from screenshots is searchable too, on-device and never uploaded.
 - Exclude apps from recording; since macOS 15.4 Clipnest follows the system clipboard-recording permission and won't read in the background when the answer is Default or Denied.
+- Recognizes common keys and tokens (AWS, GitHub, GitLab, Slack, Stripe, Google, JWT, private keys and more) and card numbers copied on their own. By default they are recorded masked: the list, preview and search show only the start and end, Show reveals the original, and pasting still uses the original. You can also skip them or turn recognition off.
+- Ignore content by regular expression, such as `^\d{6}$` for one-time codes. When a password manager clears the clipboard within 5 minutes of a copy, the entry it left is deleted too (on by default).
 - History loads 50 entries per page and the list renders only what's visible, so arrow keys and the wheel keep working with ten thousand entries.
 - Follows Reduce Motion, Reduce Transparency and Increase Contrast.
 - An actions menu and shortcuts for the selected entry (copy only, save as a snippet, open a link, delete); the Shortcuts tab in preferences lists every panel shortcut, with Ctrl/Alt/Shift on Windows and Linux.
@@ -33,7 +35,7 @@ A keyboard-first clipboard history panel for macOS and Windows. Copy as usual an
 - Nothing is uploaded or analyzed online. Data lives in `~/Library/Application Support/Clipnest/clipnest.sqlite3` on macOS and `%AppData%\Clipnest\clipnest.sqlite3` on Windows.
 - New installs use SQLite (file mode 0600) and are not encrypted; pause recording or clear history when needed.
 - Text is capped at 512 KiB per entry, images at 8 MiB and 16,000 pixels on the longest side; larger copies are skipped.
-- Clipboards marked as sensitive are ignored (macOS `ConcealedType` and friends, Windows `ExcludeClipboardContentFromMonitorProcessing`); unmarked sensitive content can't be reliably detected.
+- Clipboards marked as sensitive are ignored (macOS `ConcealedType` and friends, Windows `ExcludeClipboardContentFromMonitorProcessing`). Unmarked content can only be recognized by format: masking affects what is shown and searched, while the database keeps the original. Use ignore rules for formats Clipnest doesn't recognize. Settings are stored in `privacy.json` in the data directory.
 
 ## Development
 

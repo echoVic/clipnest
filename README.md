@@ -24,6 +24,8 @@
 - SQLite 存储，历史不限条数，按容量（默认 512 MiB）和保留天数清理；常用语单独保存，最多 500 条。
 - 搜索正文、标题和来源应用，可按文字、链接、代码、图片筛选；macOS 上用系统 Vision 识别截图里的文字并加入搜索，本机处理，不上传。
 - 按应用排除记录；macOS 15.4 起遵守系统的剪贴板记录权限，默认或拒绝时不会在后台读取。
+- 识别常见的密钥、令牌（AWS、GitHub、GitLab、Slack、Stripe、Google、JWT、私钥等）和整条复制的银行卡号，默认遮罩后记录：列表、预览和搜索只显示首尾，按「显示」查看原文，粘贴仍是原文；也可改为不记录或不识别。
+- 按正则表达式忽略内容，例如 `^\d{6}$` 跳过验证码；密码管理器在复制后 5 分钟内清空剪贴板时，历史里刚记下的那条一并删除（默认开启）。
 - 历史每页读取 50 条，列表只渲染可见区域；万条历史也能用方向键和滚轮继续选。
 - 支持系统减少动态效果、减少透明度与增强对比度设置。
 - 面板提供动作菜单与快捷键：仅复制、存为常用语、打开链接、删除；偏好设置的「快捷键」页签按场景列出全部按键，Windows/Linux 显示 Ctrl/Alt/Shift。
@@ -33,7 +35,7 @@
 - 不上传、不联网分析。数据在 macOS 的 `~/Library/Application Support/Clipnest/clipnest.sqlite3` 和 Windows 的 `%AppData%\Clipnest\clipnest.sqlite3`。
 - 新安装使用 SQLite（文件权限 0600），不是加密存储；需要时暂停记录或清空历史。
 - 单条文本上限 512 KiB，图片 8 MiB、最长边 16000 像素；超过限制跳过。
-- 带敏感标记的剪贴板会被忽略（macOS 的 `ConcealedType` 等，Windows 的 `ExcludeClipboardContentFromMonitorProcessing`）；没有标记的敏感内容无法可靠识别。
+- 带敏感标记的剪贴板会被忽略（macOS 的 `ConcealedType` 等，Windows 的 `ExcludeClipboardContentFromMonitorProcessing`）。没有标记的内容只能按格式识别：遮罩只影响显示和搜索，数据库里仍是原文；识别不到的格式请用忽略规则。设置保存在数据目录的 `privacy.json`。
 
 ## 本地开发
 
