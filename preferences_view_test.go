@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo"
@@ -20,7 +21,7 @@ func settingsView() *preferencesView {
 func TestPreferencesPagesSeparateRelatedSettings(t *testing.T) {
 	v := settingsView()
 	tt := ui.NewTester(v.draw, 620, 580)
-	if !tt.HasText("外观") || !tt.HasText("检查更新…") || tt.HasText("保存并清理") {
+	if !tt.HasText("外观") || !tt.HasText("检查更新…") || tt.HasText("保存并清理") || tt.HasText("修改唤起快捷键") {
 		t.Fatal("general page mixes unrelated settings", tt.Texts())
 	}
 	if err := tt.Click("隐私"); err != nil {
@@ -34,6 +35,12 @@ func TestPreferencesPagesSeparateRelatedSettings(t *testing.T) {
 	}
 	if !tt.HasText("历史保留策略") || !tt.HasText("保存并清理") || tt.HasText("开始记录") {
 		t.Fatal("storage settings are not grouped", tt.Texts())
+	}
+	if err := tt.Click("快捷键"); err != nil {
+		t.Fatal(err)
+	}
+	if !tt.HasText("修改唤起快捷键") || !tt.HasText("存为常用语") || tt.HasText("外观") {
+		t.Fatal("shortcuts are not on their own page", tt.Texts())
 	}
 }
 
@@ -104,8 +111,8 @@ func TestPreferencesKeyboardTabsAndClose(t *testing.T) {
 		t.Fatal("arrow key did not open storage")
 	}
 	tt.Key(0, ui.KeyEnd)
-	if v.tab != 2 || !tt.HasText("历史保留策略") {
-		t.Fatal("End did not open storage")
+	if v.tab != shortcutsTab || !tt.HasText("唤起或收起面板") {
+		t.Fatal("End did not open shortcuts")
 	}
 	tt.Key(0, ui.KeyHome)
 	if v.tab != 0 {
@@ -135,6 +142,7 @@ func TestPreferencesRetainsVersionAndUpdateAction(t *testing.T) {
 
 func TestPreferencesShortcutRecordingAndCancel(t *testing.T) {
 	v := settingsView()
+	v.tab = shortcutsTab
 	var saved string
 	closed := 0
 	v.actions.shortcut = func(acc string) { saved = acc }
@@ -173,6 +181,7 @@ func TestPreferencesShortcutRecordingAndCancel(t *testing.T) {
 
 func TestPreferencesShortcutCanRecordWindowCloseChordAndReset(t *testing.T) {
 	v := settingsView()
+	v.tab = shortcutsTab
 	var saved string
 	closed := 0
 	v.actions.shortcut = func(acc string) { saved = acc }
@@ -191,12 +200,13 @@ func TestPreferencesShortcutCanRecordWindowCloseChordAndReset(t *testing.T) {
 
 func TestPreferencesShortcutRecordingEndsWhenFocusLeaves(t *testing.T) {
 	v := settingsView()
+	v.tab = shortcutsTab
 	v.actions.shortcut = func(string) { t.Fatal("saved after recording lost focus") }
 	tt := ui.NewTester(v.draw, 620, 580)
 	tt.Click("修改唤起快捷键")
 	tt.Click("隐私")
 	tt.Key(ui.Cmd|ui.Shift, ui.KeyK)
-	tt.Click("通用")
+	tt.Click("快捷键")
 	if v.recordingShortcut || tt.HasText("按下快捷键…") {
 		t.Fatal("recording survived tab change")
 	}
@@ -204,6 +214,7 @@ func TestPreferencesShortcutRecordingEndsWhenFocusLeaves(t *testing.T) {
 
 func TestPreferencesShortcutRecordingExistingHotkey(t *testing.T) {
 	v := settingsView()
+	v.tab = shortcutsTab
 	var saved string
 	v.actions.shortcut = func(acc string) { saved = acc }
 	tt := ui.NewTester(v.draw, 620, 580)
@@ -212,5 +223,61 @@ func TestPreferencesShortcutRecordingExistingHotkey(t *testing.T) {
 	tt.Frame()
 	if saved != "Command+Shift+V" || v.recordingShortcut {
 		t.Fatal("existing global shortcut did not finish recording", saved)
+	}
+}
+
+func TestPreferencesShortcutsPageListsEveryPanelKey(t *testing.T) {
+	groups := panelShortcuts()
+	if len(groups) < 4 {
+		t.Fatal("shortcut list did not load", groups)
+	}
+	for _, platform := range []string{"darwin", "windows", "linux"} {
+		v := settingsView()
+		v.state.Platform, v.tab = platform, shortcutsTab
+		tt := ui.NewTester(v.draw, 620, 580)
+		for _, group := range groups {
+			if _, ok := tt.Find(group.Group); !ok {
+				t.Fatalf("%s: group %s missing: %q", platform, group.Group, tt.Texts())
+			}
+			for _, item := range group.Items {
+				if _, ok := tt.Find(item.Label); !ok {
+					t.Fatalf("%s: %s missing", platform, item.Label)
+				}
+				if item.Note != "" && !tt.HasText(item.Note) {
+					t.Fatalf("%s: note of %s missing", platform, item.Label)
+				}
+				for _, key := range item.keysFor(platform) {
+					if _, ok := tt.Find(key); !ok {
+						t.Fatalf("%s: key %s of %s missing", platform, key, item.Label)
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestPreferencesShortcutsFollowThePlatform(t *testing.T) {
+	v := settingsView()
+	v.tab = shortcutsTab
+	tt := ui.NewTester(v.draw, 620, 580)
+	for _, key := range []string{"⌘ ⇧ V", "⌘ S", "⌥ ↑", "⌘ ⌫", "1–9"} {
+		if _, ok := tt.Find(key); !ok {
+			t.Fatalf("macOS key %s missing", key)
+		}
+	}
+	if _, ok := tt.Find("Delete"); ok {
+		t.Fatal("macOS lists Delete, which is ⌘⌫ on Mac keyboards")
+	}
+	v.state.Platform, v.state.Shortcut = "windows", "Ctrl Alt V"
+	tt.Frame()
+	for _, key := range []string{"Ctrl Alt V", "Ctrl S", "Alt ↑", "Ctrl ↩", "Delete"} {
+		if _, ok := tt.Find(key); !ok {
+			t.Fatalf("Windows key %s missing: %q", key, tt.Texts())
+		}
+	}
+	for _, text := range tt.Texts() {
+		if strings.ContainsAny(text, "⌘⌥⇧") {
+			t.Fatalf("Windows shows a macOS glyph: %q", text)
+		}
 	}
 }

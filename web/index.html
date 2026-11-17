@@ -21,10 +21,12 @@
 <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M20 5v7a3 3 0 0 1-3 3H4m5-5-5 5 5 5"/></symbol>
 <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
 <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7"/></symbol>
+<symbol id="i-more" viewBox="0 0 24 24"><path d="M5 12h.01M12 12h.01M19 12h.01" stroke-width="3"/></symbol>
 <symbol id="i-shield" viewBox="0 0 24 24"><path d="m12 3 8 3v5c0 5-8 10-8 10s-8-5-8-10V6Z"/><path d="m8 11 3 3 5-5"/></symbol>
 <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
 <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16Z"/><path d="m13.5 6.5 4 4"/></symbol>
 <symbol id="i-storage" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0"/></symbol>
+<symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M6.25 10h1M9.75 10h1M13.25 10h1M16.75 10h1M8 14h8"/></symbol>
 </defs></svg>
 <div class="demo-top" aria-hidden="true"><span class="demo-wordmark">clipnest<span>®</span></span><span>给复制的内容，一个落脚处。</span></div>
 <main id="panel" class="panel" aria-label="剪贴板历史">
@@ -47,9 +49,9 @@
       <div id="list" class="list" role="listbox" tabindex="0" aria-label="复制历史"></div>
       <div id="empty" class="empty" role="status" hidden><div class="empty-art"><svg><use href="#i-copy"/></svg><span>+</span></div><h2>复制一下，好内容就留下了</h2><p>复制文字或图片后，在这里找回。<br>按 <strong>⌘⇧V</strong> 随时唤起。</p><button id="empty-new" type="button" class="primary" hidden>新建常用语</button><button id="list-retry" type="button" class="secondary" hidden>重试加载</button></div>
     </section>
-    <aside id="preview" class="preview" aria-label="选中内容预览"><div class="preview-id"><h2 class="preview-title">内容预览</h2><span id="type-label" class="type-label">文字</span></div><div id="preview-body" class="preview-body"></div><div id="preview-meta" class="preview-meta"></div><div class="preview-actions"><button id="copy-only" class="secondary"><svg><use href="#i-copy"/></svg>仅复制</button><button id="paste" class="primary">粘贴 <svg><use href="#i-arrow"/></svg></button></div></aside>
+    <aside id="preview" class="preview" aria-label="选中内容预览"><div class="preview-id"><h2 class="preview-title">内容预览</h2><span id="type-label" class="type-label">文字</span></div><div id="preview-body" class="preview-body"></div><div id="preview-meta" class="preview-meta"></div><div class="preview-actions"><button id="copy-only" class="secondary" title="仅复制（⌘↩）"><svg><use href="#i-copy"/></svg>仅复制</button><button id="paste" class="primary">粘贴 <svg><use href="#i-arrow"/></svg></button></div></aside>
   </div>
-  <footer class="footer"><div class="hints"><span><kbd>↑</kbd><kbd>↓</kbd> 切换</span><span><kbd>1–9</kbd> 粘贴</span><span class="wheel-hint history-only">滚轮选择</span><span class="history-only"><kbd>←</kbd><kbd>→</kbd> 常用语</span><span class="phrases-only"><kbd>⌥</kbd><kbd>↑↓</kbd> 排序</span><span class="phrases-only"><kbd>←</kbd><kbd>→</kbd> 历史</span></div><div class="footer-right"><span id="destination">粘贴到原应用</span><button id="dismiss"><kbd>esc</kbd> 关闭</button></div></footer>
+  <footer class="footer"><div class="hints"><span><kbd>↑</kbd><kbd>↓</kbd> 切换</span><span><kbd>1–9</kbd> 粘贴</span><span class="wheel-hint history-only">滚轮选择</span><span class="history-only"><kbd>←</kbd><kbd>→</kbd> 常用语</span><span class="phrases-only"><kbd>⌥</kbd><kbd>↑↓</kbd> 排序</span><span class="phrases-only"><kbd>←</kbd><kbd>→</kbd> 历史</span><span><kbd>⌘ /</kbd> 更多</span></div><div class="footer-right"><span id="destination">粘贴到原应用</span><button id="dismiss"><kbd>esc</kbd> 关闭</button></div></footer>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 </main>
 <div class="demo-bottom"><span><i></i>交互演示 · 示例数据</span><button id="reopen">重新唤起 <kbd>⌘ ⇧ V</kbd></button></div>
@@ -59,12 +61,12 @@
     <button id="preferences-general-tab" type="button" role="tab" aria-selected="true" aria-controls="preferences-general" tabindex="0"><svg><use href="#i-sliders"/></svg><span>通用</span></button>
     <button id="preferences-privacy-tab" type="button" role="tab" aria-selected="false" aria-controls="preferences-privacy" tabindex="-1"><svg><use href="#i-shield"/></svg><span>隐私</span></button>
     <button id="preferences-storage-tab" type="button" role="tab" aria-selected="false" aria-controls="preferences-storage" tabindex="-1"><svg><use href="#i-storage"/></svg><span>存储</span></button>
+    <button id="preferences-shortcuts-tab" type="button" role="tab" aria-selected="false" aria-controls="preferences-shortcuts" tabindex="-1"><svg><use href="#i-keyboard"/></svg><span>快捷键</span></button>
   </nav>
   <div class="preferences-content">
     <section id="preferences-general" role="tabpanel" aria-labelledby="preferences-general-tab">
       <section class="settings-group" aria-labelledby="general-group-title"><h3 id="general-group-title">界面与操作</h3>
         <div class="setting-row"><label for="theme">外观</label><select id="theme"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></div>
-        <div class="setting-row"><div><strong>唤起面板</strong><p>方向键或数字选择，Enter 粘贴。</p></div><kbd id="shortcut-label">⌘ ⇧ V</kbd></div>
       </section>
       <section class="settings-group" aria-labelledby="about-group-title"><h3 id="about-group-title">版本与反馈</h3>
         <div class="setting-row"><div><strong id="app-version">Clipnest</strong><p>每 4 小时自动检查更新。</p></div><span id="check-update-wrap"><button id="check-update" class="secondary" type="button">检查更新…</button></span></div>
@@ -105,6 +107,12 @@
         <div class="setting-row"><p>仅清空复制历史，不删除常用语。</p><button id="clear-history" type="button" class="danger">清空…</button></div>
       </section>
     </section>
+    <section id="preferences-shortcuts" role="tabpanel" aria-labelledby="preferences-shortcuts-tab" hidden>
+      <section class="settings-group" aria-labelledby="summon-group-title"><h3 id="summon-group-title">唤起</h3>
+        <div class="setting-row"><div><strong>唤起或收起面板</strong><p>桌面版可以在这里修改。</p></div><kbd id="shortcut-label">⌘ ⇧ V</kbd></div>
+      </section>
+      <div id="shortcut-groups"></div>
+    </section>
   </div>
 </dialog>
 <dialog id="excluded-app-picker" class="permission-dialog" aria-labelledby="excluded-app-picker-title" aria-describedby="excluded-app-picker-note">
@@ -134,5 +142,6 @@
 </dialog>
 <dialog id="phrase-editor" class="phrase-editor" aria-labelledby="phrase-editor-title"><div class="dialog-top"><h2 id="phrase-editor-title">新建常用语</h2></div><textarea id="phrase-text" aria-label="常用语内容" spellcheck="false" placeholder="输入或粘贴要反复使用的文字…"></textarea><p id="phrase-error" class="field-error" role="alert" hidden></p><div class="confirm-actions"><span class="editor-hint"><kbd>⌘ ↩</kbd> 保存</span><button id="phrase-cancel" class="secondary">取消</button><button id="phrase-save" class="primary">保存</button></div></dialog>
 <dialog id="confirm-discard" aria-labelledby="discard-title"><div class="dialog-top"><h2 id="discard-title">放弃修改？</h2></div><p>刚才输入的内容不会保存。</p><div class="confirm-actions"><button id="keep-editing" class="secondary">继续编辑</button><button id="discard-phrase" class="danger">放弃</button></div></dialog>
+<dialog id="action-menu" class="action-menu" aria-label="更多操作"><div id="action-menu-items" role="menu" aria-label="更多操作"></div></dialog>
 <dialog id="confirm-phrase-delete" aria-labelledby="phrase-delete-title"><div class="dialog-top"><h2 id="phrase-delete-title">删除这条常用语？</h2></div><p>删除后无法恢复，不影响剪贴板和复制历史。</p><div class="confirm-actions"><button class="secondary close-dialog">保留</button><button id="confirm-phrase-delete-button" class="danger">删除</button></div></dialog>
 </body></html>

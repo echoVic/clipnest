@@ -223,13 +223,13 @@ func (d *Desktop) registerShortcuts() {
 		}
 		d.shortcut, d.shortcutAccelerator = binding.Label, binding.Accelerator
 		if len(seen) > 1 {
-			d.shortcutNotice = "首选快捷键被占用或系统不支持，已改用 " + binding.Label + "；可在偏好设置中修改"
+			d.shortcutNotice = "首选快捷键被占用或系统不支持，已改用 " + binding.Label + "；可在「偏好设置 → 快捷键」中修改"
 		}
 		d.notice = d.shortcutNotice
 		return
 	}
 	d.shortcut = "菜单栏打开"
-	d.shortcutNotice = "快捷键无法注册，请从菜单栏打开，并在偏好设置中换一个组合"
+	d.shortcutNotice = "快捷键无法注册，请从菜单栏打开，并在「偏好设置 → 快捷键」中换一个组合"
 	d.notice = d.shortcutNotice
 }
 

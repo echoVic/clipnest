@@ -12,10 +12,11 @@ A keyboard-first clipboard history panel for macOS and Windows. Copy as usual an
 ## Usage
 
 - Press **⌘⇧V** (**Ctrl+Alt+V** on Windows) to open the panel; **1–9** paste directly, **↑↓ / wheel** move, **Enter** confirms and **Esc** closes.
-- **⌘K** searches everything, and **⌘,** (**Ctrl+,** on Windows) opens preferences.
-- Switch to **Snippets** at the top: insertion works like history, **⌘N** creates, **⌘E** edits and **⌥↑ / ⌥↓** reorder.
+- **⌘K** searches everything, and **⌘,** (**Ctrl+,** on Windows) opens preferences; the Shortcuts tab lists every panel shortcut.
+- Select an entry and press **⌘/** (**Ctrl+/** on Windows), or click the "…" under the preview, to open the actions menu for that entry. Shortcuts work directly too (Ctrl replaces ⌘ on Windows): **⌘↩** copy only; **⌘S** save as a snippet in a prefilled editor you can edit before saving (images and text over 64 KB can't be saved); **⌘O** open a link in your default browser; **⌘⌫ / Delete** remove it. Deleting history selects the entry that moves up, and typing in the search field still deletes characters.
+- Switch to **Snippets** at the top: insertion works like history, **⌘N** creates, **⌘E** edits, **⌘⌫ / Delete** removes (with confirmation) and **⌥↑ / ⌥↓** reorder.
 - Auto-paste needs Accessibility permission on macOS; without it you can use Copy Only. Windows needs no permission.
-- If the shortcut is taken, Clipnest tries the next one (macOS **⌥⇧V**, Windows **Ctrl+Shift+V**), and you can pick another in preferences.
+- If the shortcut is taken, Clipnest tries the next one (macOS **⌥⇧V**, Windows **Ctrl+Shift+V**), and you can pick another in Preferences → Shortcuts.
 
 ## Features
 
@@ -25,6 +26,7 @@ A keyboard-first clipboard history panel for macOS and Windows. Copy as usual an
 - Exclude apps from recording; since macOS 15.4 Clipnest follows the system clipboard-recording permission and won't read in the background when the answer is Default or Denied.
 - History loads 50 entries per page and the list renders only what's visible, so arrow keys and the wheel keep working with ten thousand entries.
 - Follows Reduce Motion, Reduce Transparency and Increase Contrast.
+- An actions menu and shortcuts for the selected entry (copy only, save as a snippet, open a link, delete); the Shortcuts tab in preferences lists every panel shortcut, with Ctrl/Alt/Shift on Windows and Linux.
 
 ## Privacy and data
 
