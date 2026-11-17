@@ -27,6 +27,7 @@
 <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16Z"/><path d="m13.5 6.5 4 4"/></symbol>
 <symbol id="i-storage" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0"/></symbol>
 <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+<symbol id="i-pin" viewBox="0 0 24 24"><path d="M9 3h6M10 3v6l-4 5h12l-4-5V3M12 14v7"/></symbol>
 <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M6.25 10h1M9.75 10h1M13.25 10h1M16.75 10h1M8 14h8"/></symbol>
 </defs></svg>
 <div class="demo-top" aria-hidden="true"><span class="demo-wordmark">clipnest<span>®</span></span><span>给复制的内容，一个落脚处。</span></div>
@@ -34,7 +35,7 @@
   <header class="header">
     <div class="identity"><div class="logo"><svg><use href="#i-copy"/></svg></div><div><h1>Clipnest</h1><span class="tagline">随手复制，随时找回。</span></div></div>
     <nav class="views" aria-label="切换页面"><button type="button" data-view="history" class="active" aria-pressed="true">历史</button><button type="button" data-view="phrases" aria-pressed="false">常用语</button></nav>
-    <div class="header-right"><span class="status" id="status"><i></i>正在记录</span><button id="pause" class="icon-button" title="暂停记录" aria-label="暂停记录"><svg><use href="#i-pause"/></svg></button><button id="settings" class="icon-button" title="偏好设置（⌘,）" aria-label="偏好设置"><svg><use href="#i-sliders"/></svg></button></div>
+    <div class="header-right"><span class="status" id="status"><i></i>正在记录</span><button id="pin" class="icon-button" title="钉住面板（⌘P）" aria-label="钉住面板" aria-pressed="false"><svg><use href="#i-pin"/></svg></button><button id="pause" class="icon-button" title="暂停记录" aria-label="暂停记录"><svg><use href="#i-pause"/></svg></button><button id="settings" class="icon-button" title="偏好设置（⌘,）" aria-label="偏好设置"><svg><use href="#i-sliders"/></svg></button></div>
   </header>
   <div id="notice" class="notice" hidden></div>
   <section id="sequence-banner" class="sequence-banner" aria-label="顺序粘贴" hidden><span id="sequence-text" role="status"></span><button id="sequence-stop" type="button" class="secondary">停止</button></section>

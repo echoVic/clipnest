@@ -100,7 +100,7 @@ async function app(t, permissionState = {}, appearance = {}) {
   await import(`./app.js?search-test=${Math.random()}`);
   await settle();
   return {
-    get, calls, bridge, filters, views, settle, events, stored,
+    get, calls, bridge, filters, views, settle, events, stored, state,
     async input(q) { get('#search').value = q; get('#search').listeners.input(); },
     async advance(ms) {
       clock += ms;
@@ -341,4 +341,15 @@ test('Windows and Linux hints use Ctrl while macOS and the demo keep the glyphs'
     ui.views[1].onclick(); await ui.settle();
     assert.equal(ui.get('#preview-meta').children[1].children[0].title, ctrl ? '编辑（Ctrl E）' : '编辑（⌘E）', platform);
   }
+});
+
+test('the pin button pins the panel and follows the state', async t => {
+  const ui = await app(t);
+  ui.bridge.handle = (method, args) => method === 'SetPinned' ? { ...ui.state(), pinned: args[1] } : undefined;
+  assert.equal(ui.get('#pin').attributes['aria-pressed'], 'false');
+  await ui.get('#pin').onclick(); await ui.settle();
+  assert.deepEqual(ui.calls.find(c => c.method === 'SetPinned').args, [1, true]);
+  assert.equal(ui.get('#pin').attributes['aria-pressed'], 'true');
+  assert.equal(ui.get('#pin').title, '取消钉住（⌘P）');
+  assert.equal(ui.get('#pin').attributes['aria-label'], '取消钉住');
 });

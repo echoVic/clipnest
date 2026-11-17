@@ -20,6 +20,7 @@ export function keyAction(event, ctx) {
   if (command && lower === 'k') return { type: 'search' };
   if (ctx.busy) return null;
   if (command && !event.altKey && !event.shiftKey && key === ',') return { type: 'settings' };
+  if (command && !event.altKey && !event.shiftKey && lower === 'p') return { type: 'pin' };
   // Shift is allowed: German and French layouts need it to type a slash.
   if (command && !event.altKey && key === '/') return ctx.hasSelection ? { type: 'menu' } : null;
   if (command && !event.altKey && !event.shiftKey && ctx.hasSelection) {

@@ -82,8 +82,8 @@ export function createDemo({ version = '开发版', accessible = true, legacySto
   const summary = e => ({ ...titled(e), text: undefined, image: undefined, masked: undefined });
   let privacy = checkPrivacy({ secrets: 'mask', clearSync: true, ignore: [] });
   const status = () => ({ ...storage, retention: { ...storage.retention } });
-  let sequence = 0;
-  const state = () => ({ session, loading, total: entries.length, entries: loading ? [] : entries.slice(0, 50).map(summary), paused, clipboardAccess, accessible, version, target: '备忘录', platform: 'demo', notice: '', shortcut: '⌘ ⇧ V', storage: status(), sequence });
+  let sequence = 0, pinned = false;
+  const state = () => ({ session, loading, total: entries.length, entries: loading ? [] : entries.slice(0, 50).map(summary), paused, clipboardAccess, accessible, version, target: '备忘录', platform: 'demo', notice: '', shortcut: '⌘ ⇧ V', storage: status(), sequence, pinned });
   const emit = () => { for (const fn of listeners) fn(state()); };
   const fresh = (publishLoading = false) => {
     session++; revision = 0; loading = true; clearTimeout(readyTimer);
@@ -183,7 +183,8 @@ export function createDemo({ version = '开发版', accessible = true, legacySto
         if (clipboardAccess === 'denied') throw Error('系统已拒绝读取');
         if (clipboardAccess === 'default') clipboardAccess = 'ask';
         return state();
-      case 'Dismiss': return null;
+      case 'Dismiss': pinned = false; return null;
+      case 'SetPinned': checkSession(args[0]); pinned = !!args[1]; return state();
       case 'Phrases': return phrases.filter(p => p.text.toLowerCase().includes(args[0].toLowerCase().trim())).map(p => ({ id: p.id, excerpt: excerpt(p.text) }));
       case 'PhraseDetail': return { ...phrase(args[0]) };
       case 'SavePhrase': {

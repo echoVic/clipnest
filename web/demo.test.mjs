@@ -317,3 +317,12 @@ test('demo sequential paste counts the queue without touching the clipboard', as
  assert.deepEqual(published.map(s => [s.session, s.sequence]), [[state.session, 3]], 'the open panel learns the count without a new session');
  assert.equal((await demo.call('StopSequence')).sequence, 0);
 });
+test('the demo pins the panel until it is dismissed', async () => {
+ const { call } = createDemo();
+ const opened = await call('State');
+ assert.equal(opened.pinned, false);
+ assert.equal((await call('SetPinned', opened.session, true)).pinned, true);
+ await assert.rejects(call('SetPinned', opened.session + 1, false), /会话已过期/);
+ await call('Dismiss');
+ assert.equal((await call('State')).pinned, false);
+});

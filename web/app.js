@@ -73,6 +73,9 @@ function header() {
   $('#status').replaceChildren(node('i'), document.createTextNode(status));
   $('#pause').replaceChildren(icon(state.paused ? 'play' : 'pause'));
   $('#pause').title = state.paused ? '恢复记录' : '暂停记录'; $('#pause').setAttribute('aria-label', $('#pause').title);
+  const pin = state.pinned ? '取消钉住' : '钉住面板', pinTitle = `${pin}（⌘P）`;
+  $('#pin').title = ctrlPlatform() ? ctrlKeys(pinTitle).replace(/（ /g, '（') : pinTitle;
+  $('#pin').setAttribute('aria-label', pin); $('#pin').setAttribute('aria-pressed', String(!!state.pinned));
   $('#record-pause').checked = !!state.paused;
   $('#record-pause').disabled = busy;
   $('#destination').textContent = state.target ? `粘贴到 ${state.target}` : '选中后可复制';
@@ -516,7 +519,7 @@ async function choose(copyOnly, pick) {
     if (!pages.isCurrent(ticket) || blocked()) return;
     busy = dispatching = true; actionButtons();
     const result = ticket.view === 'phrases' ? await call('InsertPhrase', ticket.session, ticket.id, copyOnly) : await call('Choose', ticket.session, ticket.id, copyOnly);
-    if (demo && !copyOnly) $('#panel').classList.add('dismissed');
+    if (demo && !copyOnly && !state.pinned) $('#panel').classList.add('dismissed');
     toast(result.message);
   } catch (err) { toast(message(err)); }
   finally { choosing = false; if (dispatching) busy = false; render(); }
@@ -672,6 +675,11 @@ async function reorder(delta) {
   reordering = true;
   try { await call('MovePhrase', entry.id, delta); await refresh(entry.id); } catch (err) { toast(message(err)); refresh(entry.id); } finally { reordering = false; }
 }
+async function togglePin() {
+  if (busy) return;
+  try { applyState(await call('SetPinned', state.session, !state.pinned)); } catch (err) { toast(message(err)); }
+}
+$('#pin').onclick = togglePin;
 async function dismiss() {
   if (busy) return;
   invalidateSearch(); ++detailVersion; clearTimeout(queryTimer); queryScheduled = true;
@@ -814,6 +822,7 @@ document.addEventListener('keydown', event => {
     case 'dismiss': dismiss(); break;
     case 'search': $('#search').focus(); break;
     case 'settings': $('#settings').click(); break;
+    case 'pin': togglePin(); break;
     case 'menu': toggleMenu(); break;
     case 'menu-move': moveMenuFocus(action.delta); break;
     case 'select': select(moveIndex(pages.selected, action.delta, pages.total)); if (!typing) $('#list').focus({ preventScroll: true }); break;
