@@ -22,6 +22,14 @@ func sequenceUnavailable(goos string, sequence *pasteSequence, accessible bool) 
 	return nil
 }
 
+// sequenceOwnWindow reports whether a press of the paste keys belongs to one
+// of Clipnest's own windows. The panel hides when it loses focus, so while it
+// shows it has the keys, even on macOS where it takes them without making
+// Clipnest the front app.
+func sequenceOwnWindow(panelVisible bool, front targetApp) bool {
+	return panelVisible || front.PID == 0
+}
+
 func writeClipboard(e Entry) error {
 	if e.Kind == "image" {
 		return mygo.Clipboard.WriteImage(e.Image)
@@ -44,7 +52,9 @@ func (d *Desktop) newSequence() *pasteSequence {
 			d.lastRevision, d.lastID = d.n.Revision(), e.ID
 			return nil
 		},
-		self: func() bool { return d.n.Target().PID == 0 },
+		self: func() bool {
+			return sequenceOwnWindow(d.win != nil && d.win.IsVisible(), d.n.Target())
+		},
 		send: d.n.PasteHeld,
 		after: func(delay time.Duration, fn func()) func() {
 			timer := time.AfterFunc(delay, func() { mygo.RunOnMain(fn) })
