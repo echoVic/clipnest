@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { entryActions } from './actions.js';
+import { entryActions, sequenceBanner } from './actions.js';
 const types = ctx => entryActions({ view: 'history', kind: 'text', imageText: false, index: 0, total: 3, hasQuery: false, ctrl: false, ...ctx }).map(a => a.type);
 test('history actions follow the entry kind', () => {
  assert.deepEqual(types({}), ['choose', 'copy', 'save-phrase', 'delete']);
@@ -38,4 +38,19 @@ test('shortcut hints match the platform', () => {
  const phrase = ctrl => Object.fromEntries(entryActions({ view: 'phrases', index: 1, total: 3, ctrl }).map(a => [`${a.type}${a.delta ?? ''}`, a.shortcut]));
  assert.deepEqual(phrase(false), { choose: '↩', copy: '⌘ ↩', edit: '⌘ E', 'reorder-1': '⌥ ↑', reorder1: '⌥ ↓', delete: '⌘ ⌫' });
  assert.deepEqual(phrase(true), { choose: '↩', copy: 'Ctrl ↩', edit: 'Ctrl E', 'reorder-1': 'Alt ↑', reorder1: 'Alt ↓', delete: 'Delete' });
+});
+test('sequential paste starts from a history entry below the top', () => {
+ const sequence = ctx => entryActions({ view: 'history', kind: 'text', index: 2, total: 5, ctrl: false, sequence: true, ...ctx }).find(a => a.type === 'sequence');
+ assert.deepEqual(sequence({}), { type: 'sequence', label: '从这条起顺序粘贴（3 条）', shortcut: '' });
+ assert.deepEqual(types({ index: 2, sequence: true }), ['choose', 'copy', 'sequence', 'save-phrase', 'delete']);
+ assert.equal(sequence({ index: 1, kind: 'image' }).label, '从这条起顺序粘贴（2 条）', 'images can be queued');
+ assert.equal(sequence({ index: 0 }), undefined, 'the top entry alone is just a paste');
+ assert.equal(sequence({ sequence: false }), undefined, 'platforms without auto-paste');
+ assert.equal(sequence({ view: 'phrases' }), undefined);
+});
+test('the sequence banner names the paste keys of the platform', () => {
+  assert.equal(sequenceBanner(3, false), '正在顺序粘贴，剩 3 条，每次 ⌘V 粘贴下一条');
+  assert.equal(sequenceBanner(1, true), '正在顺序粘贴，剩 1 条，每次 Ctrl+V 粘贴下一条');
+  assert.equal(sequenceBanner(0, false), '', 'no banner once the sequence ends');
+  assert.equal(sequenceBanner(undefined, false), '', 'an older state without the field shows nothing');
 });

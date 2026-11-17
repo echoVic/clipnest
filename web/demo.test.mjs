@@ -299,3 +299,21 @@ test('demo privacy settings follow the desktop rules', async () => {
  await reject({ ignore: Array.from({ length: 65 }, (_, i) => `rule${i}`) }, /最多 64 条/);
  assert.deepEqual((await call('Privacy')).ignore, ['^\\d{6}$', '(?i)internal'], 'a rejected save changes nothing');
 });
+
+test('demo sequential paste counts the queue without touching the clipboard', async () => {
+ const demo = createDemo(), ready = readyState(demo);
+ await demo.call('State');
+ const state = await ready;
+ assert.equal(state.sequence, 0);
+ const page = await demo.call('Page', state.session, 1, '', 'all', 0, 50);
+ await assert.rejects(demo.call('StartSequence', state.session, '', 'all', 0, page.entries[0].id), /至少需要 2 条/);
+ await assert.rejects(demo.call('StartSequence', state.session, '', 'all', 2, page.entries[1].id), /列表已更新/);
+ await assert.rejects(demo.call('StartSequence', state.session + 1, '', 'all', 2, page.entries[2].id), /会话已过期/);
+ const links = await demo.call('Page', state.session, 1, '', 'link', 0, 50);
+ assert.equal(await demo.call('StartSequence', state.session, '', 'link', 0, links.entries[0].id).catch(e => e.message), '至少需要 2 条才能顺序粘贴');
+ const published = [];
+ demo.on('clipnest:panel', s => published.push(s));
+ assert.equal(await demo.call('StartSequence', state.session, '', 'all', 2, page.entries[2].id), null);
+ assert.deepEqual(published.map(s => [s.session, s.sequence]), [[state.session, 3]], 'the open panel learns the count without a new session');
+ assert.equal((await demo.call('StopSequence')).sequence, 0);
+});
