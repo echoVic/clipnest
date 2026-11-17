@@ -2,7 +2,7 @@
   "name": "Clipnest",
   "slug": "clipnest",
   "identifier": "app.clipnest.desktop",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "license": "MIT",
   "frontendDist": "web",
   "out": "build",
