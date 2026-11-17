@@ -326,3 +326,15 @@ test('the demo pins the panel until it is dismissed', async () => {
  await call('Dismiss');
  assert.equal((await call('State')).pinned, false);
 });
+test('the demo reloads the history and finds the selected entry', async () => {
+ const { call } = createDemo();
+ const opened = await call('State');
+ await new Promise(resolve => setTimeout(resolve, 20));
+ const page = await call('Page', opened.session, 1, '', 'all', 0, 50);
+ const { state, index } = await call('Reload', opened.session, '', 'all', page.entries[2].id);
+ assert.equal(state.session, opened.session + 1); assert.equal(state.loading, false); assert.equal(index, 2);
+ assert.equal((await call('Reload', state.session, '', 'code', page.entries[2].id)).index, -1);
+ // The code reload above swapped the session once more; a stale one changes nothing.
+ const stale = await call('Reload', opened.session, '', 'all', '');
+ assert.equal(stale.state.session, state.session + 1); assert.equal(stale.index, -1);
+});
