@@ -152,6 +152,17 @@ func (n *nativeBridge) Activate(t targetApp) bool {
 
 // acquireForeground is a Windows-only foreground-lock workaround.
 func (n *nativeBridge) acquireForeground() func() { return func() {} }
+
+// suspendAnimation turns off a window's fade until the returned func runs,
+// so ordering it out and straight back in does not show it vanishing.
+func (n *nativeBridge) suspendAnimation(window uintptr) func() {
+	if window == 0 {
+		return func() {}
+	}
+	behavior := n.send(window, "animationBehavior")
+	n.send(window, "setAnimationBehavior:", 2) // NSWindowAnimationBehaviorNone
+	return func() { n.send(window, "setAnimationBehavior:", behavior) }
+}
 func (n *nativeBridge) Revision() int64 {
 	defer n.pool()()
 	return int64(n.send(n.send(n.getClass("NSPasteboard"), "generalPasteboard"), "changeCount"))

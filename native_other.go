@@ -17,6 +17,7 @@ func openNative() (*nativeBridge, error)               { return &nativeBridge{},
 func (*nativeBridge) Target() targetApp                { return targetApp{} }
 func (*nativeBridge) Activate(targetApp) bool          { return false }
 func (*nativeBridge) acquireForeground() func()        { return func() {} }
+func (*nativeBridge) suspendAnimation(uintptr) func()  { return func() {} }
 func (*nativeBridge) Revision() int64                  { return -1 }
 func (*nativeBridge) Empty() bool                      { return false }
 func (*nativeBridge) ClipboardAccess() ClipboardAccess { return clipboardUnsupported }

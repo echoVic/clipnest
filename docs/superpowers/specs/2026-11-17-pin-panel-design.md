@@ -57,7 +57,7 @@
 - `OpenLink`、`StartSequence`：钉住时不收起面板，`StartSequence` 同样 `handOff`。
 - 交还键盘 `handOff`：
   - Windows：`Activate(target)` 用 `SetForegroundWindow` 交出前台，面板保持置顶。
-  - macOS：面板拿键盘时不让 Clipnest 成为前台应用。先试 `Activate(target)`，面板仍是 key window 时退一步：收起面板再用 `ShowInactive` 原地显示、不拿键盘，期间用标记让 `hidden()` 不结束会话和钉住。哪种可行以实机为准，实现时最先验证。
+  - macOS：面板拿键盘时不让 Clipnest 成为前台应用，所以只 `Activate(target)` 交不出键盘（实机验证：粘贴等到超时，之后的按键仍进面板）。做法是收起面板再用 `ShowInactive` 原地显示、不拿键盘，期间用标记让 `hidden()` 不结束会话和钉住。这期间关掉窗口的淡出动画（`animationBehavior` 设为 None，结束后恢复），否则面板会消失约 270 ms 再出现；关掉后实机录屏没有一帧变暗。
 - 新事件 `clipnest:history-changed`，内容是会话号。`captureWith` 记下新条目、面板显示时发出；`monitor` 每小时的自动清理成功、面板又在显示时也发（`Cleanup` 不报告删了几条，一小时多刷新一次无妨）。
 - 顺序粘贴的 `self` 改为 `sequenceOwnWindow(panelFocused, front)`：面板显示且有键盘焦点，或前台是 Clipnest。
 - `go tool mygo generate` 更新 `bindings.ts`。

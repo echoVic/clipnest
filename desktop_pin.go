@@ -157,13 +157,15 @@ func (d *Desktop) leavePanel(target targetApp) {
 // handOff takes the keyboard from a pinned panel without hiding it. On macOS
 // the panel takes the keys without activating Clipnest, so activating the
 // app in front does not take them back; ordering the panel out does, and
-// showing it again without focus keeps it on screen. handingOff keeps that
-// brief hide from ending the session. On Windows, Activate hands over the
-// foreground and the panel stays above it.
+// showing it again without focus keeps it on screen. Its fade is off
+// meanwhile, or the panel would vanish for a quarter second. handingOff keeps
+// that brief hide from ending the session. On Windows, Activate hands over
+// the foreground and the panel stays above it.
 func (d *Desktop) handOff() {
 	if runtime.GOOS != "darwin" {
 		return
 	}
+	defer d.n.suspendAnimation(d.win.NativeHandle())()
 	d.handingOff = true
 	d.win.Hide()
 	d.win.ShowInactive()
