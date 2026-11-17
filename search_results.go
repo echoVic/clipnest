@@ -140,7 +140,7 @@ func (v *historyView) searchSummaries(ctx context.Context, ids []int64, total, o
 		args[i] = id
 	}
 	marks := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
-	rows, err := v.tx.QueryContext(ctx, fmt.Sprintf(`SELECT id,kind,title,excerpt,source,created,width,height
+	rows, err := v.tx.QueryContext(ctx, fmt.Sprintf(`SELECT id,kind,title,excerpt,source,created,width,height,secret
 		FROM history WHERE search_id IN (%s) ORDER BY position`, marks), args...)
 	if err != nil {
 		return page, err
@@ -148,7 +148,7 @@ func (v *historyView) searchSummaries(ctx context.Context, ids []int64, total, o
 	defer rows.Close()
 	for rows.Next() {
 		var e Entry
-		if err := rows.Scan(&e.ID, &e.Kind, &e.Title, &e.Excerpt, &e.Source, &e.Created, &e.Width, &e.Height); err != nil {
+		if err := rows.Scan(&e.ID, &e.Kind, &e.Title, &e.Excerpt, &e.Source, &e.Created, &e.Width, &e.Height, &e.Secret); err != nil {
 			return page, err
 		}
 		page.Entries = append(page.Entries, e)

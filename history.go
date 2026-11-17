@@ -141,6 +141,7 @@ func openHistory(path string) (*History, error) {
 			return nil, fmt.Errorf("历史条目 %d 无效，原文件保持不变：%w", i+1, err)
 		}
 		e.Created = x.Created
+		e.remask(x.Secret)
 		h.addLocked(e)
 	}
 	h.saved = h.version

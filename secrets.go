@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"regexp"
 	"slices"
 	"strings"
@@ -170,4 +171,28 @@ func (e *Entry) mask() bool {
 	e.Title, e.Excerpt = textTitles(masked)
 	e.searchText = prepareSearch(*e)
 	return true
+}
+
+// remask restores the mask of an entry recorded as a secret. When the rules no
+// longer recognize its text, all of it is hidden rather than shown.
+func (e *Entry) remask(secret string) {
+	if secret == "" || e.Kind == "image" {
+		return
+	}
+	if !e.mask() {
+		e.Masked = maskDots
+		e.Title, e.Excerpt = textTitles(maskDots)
+	}
+	e.Secret = secret
+	e.searchText = prepareSearch(*e)
+}
+
+// The history column that stores a masked entry's secret type.
+const secretColumn = "secret TEXT NOT NULL DEFAULT ''"
+
+func (s *sqliteStore) upgradeSecret() error {
+	return s.transaction(func(tx *sql.Tx) error {
+		_, err := tx.Exec("ALTER TABLE history ADD COLUMN " + secretColumn + "; PRAGMA user_version=5")
+		return err
+	})
 }

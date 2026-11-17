@@ -34,17 +34,22 @@ func insertEntrySQL(tx *sql.Tx, e Entry, position int64) error {
 	if imageTextEligible(e) {
 		state = ocrPending
 	}
-	_, err := tx.Exec(`INSERT INTO history(id,position,source,created,kind,title,excerpt,width,height,byte_size,source_search,ocr_state,search_id)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,(SELECT coalesce(max(search_id),0)+1 FROM history))`, e.ID, position, e.Source, e.Created, e.Kind, e.Title, e.Excerpt, e.Width, e.Height, e.size(), strings.ToLower(e.Source), state)
+	_, err := tx.Exec(`INSERT INTO history(id,position,source,created,kind,title,excerpt,width,height,byte_size,source_search,ocr_state,secret,search_id)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,(SELECT coalesce(max(search_id),0)+1 FROM history))`, e.ID, position, e.Source, e.Created, e.Kind, e.Title, e.Excerpt, e.Width, e.Height, e.size(), strings.ToLower(e.Source), state, e.Secret)
 	if err != nil {
 		return err
 	}
 	_, err = tx.Exec("INSERT INTO history_content(id,text,image,search_prefix) VALUES(?,?,?,?)",
-		e.ID, e.Text, e.Image, strings.ToLower(e.Text+" "+e.Title+" "))
+		e.ID, e.Text, e.Image, searchPrefix(e))
 	if err != nil {
 		return err
 	}
 	return replaceSearchSQL(tx, e.ID)
+}
+
+// The searchable text and title of an entry; source is indexed separately.
+func searchPrefix(e Entry) string {
+	return strings.ToLower(e.searchBody() + " " + e.Title + " ")
 }
 
 type historyChange struct {
@@ -83,8 +88,8 @@ func (s *sqliteStore) apply(changes []historyChange, paused bool, policy *Retent
 			default:
 				e := change.entry
 				position--
-				var source string
-				err := tx.QueryRow("SELECT source FROM history WHERE id=?", e.ID).Scan(&source)
+				var source, secret, title, excerpt string
+				err := tx.QueryRow("SELECT source,secret,title,excerpt FROM history WHERE id=?", e.ID).Scan(&source, &secret, &title, &excerpt)
 				if errors.Is(err, sql.ErrNoRows) {
 					if err := insertEntrySQL(tx, e, position); err != nil {
 						return err
@@ -98,7 +103,19 @@ func (s *sqliteStore) apply(changes []historyChange, paused bool, policy *Retent
 					position, e.Source, strings.ToLower(e.Source), e.Created, e.ID); err != nil {
 					return err
 				}
-				if source != e.Source {
+				// A re-copy recorded under a different mask state rewrites what
+				// the list and search show; the old index terms are purged.
+				// Image titles come from recognized text and are left alone.
+				masked := e.Kind != "image" && (secret != e.Secret || title != e.Title || excerpt != e.Excerpt)
+				if masked {
+					if _, err := tx.Exec("UPDATE history SET secret=?,title=?,excerpt=? WHERE id=?", e.Secret, e.Title, e.Excerpt, e.ID); err != nil {
+						return err
+					}
+					if _, err := tx.Exec("UPDATE history_content SET search_prefix=? WHERE id=?", searchPrefix(e), e.ID); err != nil {
+						return err
+					}
+				}
+				if source != e.Source || masked {
 					if err := replaceSearchSQL(tx, e.ID); err != nil {
 						return err
 					}
