@@ -31,6 +31,8 @@ type PanelState struct {
 	Version         string          `json:"version"`
 	// Sequence counts the entries a running paste sequence has left; 0 when none runs.
 	Sequence int `json:"sequence"`
+	// Pinned keeps the panel up when it loses the keyboard and after a paste.
+	Pinned bool `json:"pinned"`
 }
 type PasteResult struct {
 	Copied  bool   `json:"copied"`
@@ -72,7 +74,11 @@ type Desktop struct {
 	shortcutNotice        string
 	busy                  bool
 	quitting              bool
-	stop                  chan struct{}
+	// pinned keeps the panel up; hiding it unpins. handingOff marks the brief
+	// hide that takes the keyboard from a pinned panel on macOS.
+	pinned     bool
+	handingOff bool
+	stop       chan struct{}
 }
 
 func (d *Desktop) snapshot() PanelState {
@@ -86,6 +92,7 @@ func (d *Desktop) snapshot() PanelState {
 		ClipboardAccess: d.clipboardAccess,
 		Target:          d.target.Name, Platform: runtime.GOOS, Notice: d.notice, Shortcut: d.shortcut,
 		Storage: d.StorageStatus(), Version: applicationVersion(), Sequence: d.sequenceRemaining(),
+		Pinned: d.pinned,
 	}
 }
 func (d *Desktop) State() (s PanelState) { mygo.RunOnMain(func() { s = d.snapshot() }); return }
@@ -270,7 +277,7 @@ func (d *Desktop) Choose(session uint64, id string, copyOnly bool) (PasteResult,
 // opened from. Recording the clipboard revision keeps capture from re-adding it.
 func (d *Desktop) deliver(e Entry, copyOnly bool, session uint64) (result PasteResult, err error) {
 	var target targetApp
-	started := false
+	started, pinned := false, false
 	mygo.RunOnMain(func() {
 		if session != d.session || !d.win.IsVisible() || d.quitting {
 			err = errors.New("面板已更新，请重新选择")
@@ -284,6 +291,7 @@ func (d *Desktop) deliver(e Entry, copyOnly bool, session uint64) (result PasteR
 			err = errors.New("允许辅助功能后即可自动粘贴，也可以使用「仅复制」")
 			return
 		}
+		d.trackTarget()
 		if err = writeClipboard(e); err != nil {
 			return
 		}
@@ -296,9 +304,8 @@ func (d *Desktop) deliver(e Entry, copyOnly bool, session uint64) (result PasteR
 		}
 		d.busy = true
 		started = true
-		target = d.target
-		d.hide()
-		d.n.Activate(target)
+		target, pinned = d.target, d.pinned
+		d.leavePanel(target)
 	})
 	if err != nil || !started {
 		return
@@ -313,7 +320,8 @@ func (d *Desktop) deliver(e Entry, copyOnly bool, session uint64) (result PasteR
 			if d.quitting {
 				return
 			}
-			ready = d.n.ReadyToPaste(target)
+			// A pinned panel stays up; never post the paste to it.
+			ready = d.n.ReadyToPaste(target) && !(pinned && d.win.IsFocused())
 			if ready {
 				// A running sequence holds ⌘V; let this one through.
 				if d.sequence != nil {
@@ -396,7 +404,7 @@ func (d *Desktop) OpenLink(session uint64, id string) error {
 		return err
 	}
 	mygo.RunOnMain(func() {
-		if session == d.session && d.win != nil && d.win.IsVisible() {
+		if session == d.session && d.win != nil && d.win.IsVisible() && !d.pinned {
 			d.hide()
 		}
 	})

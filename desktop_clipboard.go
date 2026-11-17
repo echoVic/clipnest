@@ -322,6 +322,7 @@ func (d *Desktop) monitor() {
 			mygo.RunOnMain(func() {
 				if !d.quitting && !d.busy {
 					d.capture()
+					d.trackTarget()
 				}
 			})
 		case <-save.C:

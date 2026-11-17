@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"runtime"
 	"strings"
 
 	"github.com/egoist/mygo"
@@ -112,4 +114,58 @@ func (d *Desktop) Reload(session uint64, q, kind, id string) (r PanelReload, err
 		r.State, r.Index = d.snapshot(), index
 	})
 	return r, nil
+}
+
+// SetPinned pins or unpins the showing panel. Hiding the panel unpins it.
+func (d *Desktop) SetPinned(session uint64, pinned bool) (s PanelState, err error) {
+	mygo.RunOnMain(func() {
+		if session != d.session || d.win == nil || !d.win.IsVisible() || d.quitting {
+			err = errors.New("面板已更新，请重新选择")
+			return
+		}
+		d.pinned = pinned
+		s = d.snapshot()
+	})
+	return
+}
+
+// trackTarget follows the app a pinned panel pastes into as the user
+// switches apps, and shows its name in the panel when it changes.
+func (d *Desktop) trackTarget() {
+	if !d.pinned || d.win == nil || !d.win.IsVisible() {
+		return
+	}
+	next := trackedTarget(d.target, d.n.Target())
+	changed := next.Name != d.target.Name
+	d.target = next
+	if changed {
+		_ = panelChanged.Broadcast(d.snapshot())
+	}
+}
+
+// leavePanel gives the keyboard back to target: a pinned panel stays up,
+// any other one hides.
+func (d *Desktop) leavePanel(target targetApp) {
+	if d.pinned {
+		d.handOff()
+	} else {
+		d.hide()
+	}
+	d.n.Activate(target)
+}
+
+// handOff takes the keyboard from a pinned panel without hiding it. On macOS
+// the panel takes the keys without activating Clipnest, so activating the
+// app in front does not take them back; ordering the panel out does, and
+// showing it again without focus keeps it on screen. handingOff keeps that
+// brief hide from ending the session. On Windows, Activate hands over the
+// foreground and the panel stays above it.
+func (d *Desktop) handOff() {
+	if runtime.GOOS != "darwin" {
+		return
+	}
+	d.handingOff = true
+	d.win.Hide()
+	d.win.ShowInactive()
+	d.handingOff = false
 }
