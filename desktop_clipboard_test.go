@@ -380,3 +380,22 @@ func TestMonitorReportsEveryFailureAndTheFirstRecovery(t *testing.T) {
 		t.Fatal("a lasting failure did not restore its notice", d.notice)
 	}
 }
+
+func TestCaptureReportsOnlyRecordedCopies(t *testing.T) {
+	d := clipboardDesktop(t)
+	c := &testClipboard{access: clipboardAllowed, revision: 1, portable: []transfer.Format{transfer.Text}, text: []byte("first")}
+	if !d.captureWith(c) {
+		t.Fatal("a new copy was not reported")
+	}
+	if d.captureWith(c) {
+		t.Fatal("the same revision was reported again")
+	}
+	c.revision, c.readErr = 2, errors.New("busy")
+	if d.captureWith(c) {
+		t.Fatal("a failed read was reported")
+	}
+	c.revision, c.readErr, c.access = 3, nil, clipboardDenied
+	if d.captureWith(c) {
+		t.Fatal("a copy that could not be read was reported")
+	}
+}

@@ -32,7 +32,7 @@ func (d *Desktop) ready() {
 	d.win.SetMenu(mygo.NewMenu(nil))
 	d.win.OnHide(d.hidden)
 	d.win.OnBlur(func() {
-		if !d.busy && !d.permissionActive() {
+		if hideOnBlur(d.busy, d.permissionActive(), d.pinned) {
 			d.hide()
 		}
 	})
@@ -62,9 +62,14 @@ func (d *Desktop) closeView() {
 	}
 }
 
-// Both app-initiated and framework-initiated hiding end the session. Native
-// callbacks can reenter Hide; invalidation must happen once.
+// Both app-initiated and framework-initiated hiding end the session and the
+// pinning, except the brief hide of handOff. Native callbacks can reenter
+// Hide; invalidation must happen once.
 func (d *Desktop) hidden() {
+	if d.handingOff {
+		return
+	}
+	d.pinned = false
 	d.cancelPermission()
 	if d.cancelView == nil && d.view == nil && !d.loading {
 		return
@@ -167,12 +172,18 @@ func (d *Desktop) show() {
 	if d.busy || d.quitting || d.win == nil {
 		return
 	}
-	if d.win.IsVisible() {
+	switch panelToggle(d.win.IsVisible(), d.pinned, d.win.IsFocused()) {
+	case toggleFocus:
+		d.trackTarget()
+		releaseForeground := d.n.acquireForeground()
+		d.win.Focus()
+		releaseForeground()
+	case toggleClose:
 		d.hide()
 		d.n.Activate(d.target)
-		return
+	default:
+		d.openPanel()
 	}
-	d.openPanel()
 }
 
 type shortcutChoice struct {

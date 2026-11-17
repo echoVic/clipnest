@@ -82,8 +82,8 @@ export function createDemo({ version = '开发版', accessible = true, legacySto
   const summary = e => ({ ...titled(e), text: undefined, image: undefined, masked: undefined });
   let privacy = checkPrivacy({ secrets: 'mask', clearSync: true, ignore: [] });
   const status = () => ({ ...storage, retention: { ...storage.retention } });
-  let sequence = 0;
-  const state = () => ({ session, loading, total: entries.length, entries: loading ? [] : entries.slice(0, 50).map(summary), paused, clipboardAccess, accessible, version, target: '备忘录', platform: 'demo', notice: '', shortcut: '⌘ ⇧ V', storage: status(), sequence });
+  let sequence = 0, pinned = false;
+  const state = () => ({ session, loading, total: entries.length, entries: loading ? [] : entries.slice(0, 50).map(summary), paused, clipboardAccess, accessible, version, target: '备忘录', platform: 'demo', notice: '', shortcut: '⌘ ⇧ V', storage: status(), sequence, pinned });
   const emit = () => { for (const fn of listeners) fn(state()); };
   const fresh = (publishLoading = false) => {
     session++; revision = 0; loading = true; clearTimeout(readyTimer);
@@ -97,6 +97,7 @@ export function createDemo({ version = '开发版', accessible = true, legacySto
     if (next < revision) throw Error('搜索已过期');
     revision = next;
   };
+  const matching = (q, kind) => entries.filter(e => (kind === 'all' || e.kind === kind) && searchable(e).toLowerCase().includes(q.toLowerCase().trim()));
   const historyEntry = id => { const e = entries.find(e => e.id === id); if (!e) throw Error('这条记录已删除'); return e; };
   return {
     on(event, fn) { if (event === 'clipnest:panel') listeners.add(fn); return () => listeners.delete(fn); },
@@ -144,7 +145,7 @@ export function createDemo({ version = '开发版', accessible = true, legacySto
         if (!Number.isSafeInteger(offset) || offset < 0 || limit !== 50) throw Error('无效的分页');
         await Promise.resolve();
         checkSession(id); checkRevision(next);
-        const matches = entries.filter(e => (kind === 'all' || e.kind === kind) && searchable(e).toLowerCase().includes(q.toLowerCase().trim()));
+        const matches = matching(q, kind);
         return { entries: matches.slice(offset, offset + limit).map(summary), total: matches.length, offset };
       }
       case 'Detail': checkSession(args[0]); { const e = historyEntry(args[1]); return { ...titled(e), ...imageDetail(e) }; }
@@ -164,7 +165,7 @@ export function createDemo({ version = '开发版', accessible = true, legacySto
         checkSession(id);
         if (!Number.isSafeInteger(index) || index < 1) throw Error('至少需要 2 条才能顺序粘贴');
         if (index >= 100) throw Error('顺序粘贴最多 100 条，请从更近的一条开始');
-        const matches = entries.filter(e => (kind === 'all' || e.kind === kind) && searchable(e).toLowerCase().includes(q.toLowerCase().trim()));
+        const matches = matching(q, kind);
         if (matches[index]?.id !== entryID) throw Error('列表已更新，请重新选择');
         sequence = index + 1;
         emit();
@@ -183,7 +184,16 @@ export function createDemo({ version = '开发版', accessible = true, legacySto
         if (clipboardAccess === 'denied') throw Error('系统已拒绝读取');
         if (clipboardAccess === 'default') clipboardAccess = 'ask';
         return state();
-      case 'Dismiss': return null;
+      case 'Dismiss': pinned = false; return null;
+      // Like the desktop, a reload swaps the snapshot at once and says where
+      // the selected entry went; a stale session changes nothing.
+      case 'Reload': {
+        const [id, q, kind, entryID] = args;
+        if (id !== session) return { state: state(), index: -1 };
+        session++; revision = 0;
+        return { state: state(), index: entryID ? matching(q, kind).findIndex(e => e.id === entryID) : -1 };
+      }
+      case 'SetPinned': checkSession(args[0]); pinned = !!args[1]; return state();
       case 'Phrases': return phrases.filter(p => p.text.toLowerCase().includes(args[0].toLowerCase().trim())).map(p => ({ id: p.id, excerpt: excerpt(p.text) }));
       case 'PhraseDetail': return { ...phrase(args[0]) };
       case 'SavePhrase': {

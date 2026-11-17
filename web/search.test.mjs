@@ -34,7 +34,8 @@ class Element {
 async function app(t, permissionState = {}, appearance = {}) {
   const elements = new Map(), events = new Map(), calls = [], timers = new Map(), frames = new Map();
   const stored = new Map([['clipnest-theme', appearance.saved ?? null]]);
-  let clock = 0, timerID = 0, frameID = 0, session = 1;
+  let clock = 0, timerID = 0, frameID = 0, session = 1, openDialog = null;
+  const documentListeners = new Map();
   const get = selector => {
     if (!elements.has(selector)) elements.set(selector, new Element());
     return elements.get(selector);
@@ -64,6 +65,7 @@ async function app(t, permissionState = {}, appearance = {}) {
         case 'Phrases': return [{ id: 'phrase-exact', excerpt: 'Phrase' }];
         case 'PhraseDetail': return { id: args[0], text: 'Full phrase' };
         case 'Choose': case 'InsertPhrase': return { copied: false, pasted: false, message: 'Mock only' };
+        case 'Reload': return { state: state(), index: -1 };
         default: return null;
       }
     },
@@ -71,10 +73,10 @@ async function app(t, permissionState = {}, appearance = {}) {
   const globals = {
     document: {
       body: new Element(), documentElement: new Element(),
-      querySelector: selector => selector === 'dialog[open]' ? null : get(selector),
+      querySelector: selector => selector === 'dialog[open]' ? openDialog : get(selector),
       querySelectorAll: selector => selector === '.filters button' ? filters : selector === '.views button' ? views : [],
       createElement: () => new Element(), createElementNS: () => new Element(),
-      createTextNode: text => text, createDocumentFragment: () => new Element(), addEventListener() {},
+      createTextNode: text => text, createDocumentFragment: () => new Element(), addEventListener: (event, fn) => documentListeners.set(event, fn),
     },
     window: { mygo: bridge }, location: { search: '' },
     localStorage: { getItem: key => stored.get(key), setItem: (key, value) => stored.set(key, value) },
@@ -100,7 +102,12 @@ async function app(t, permissionState = {}, appearance = {}) {
   await import(`./app.js?search-test=${Math.random()}`);
   await settle();
   return {
-    get, calls, bridge, filters, views, settle, events, stored,
+    get, calls, bridge, filters, views, settle, events, stored, state,
+    dialog(open) { openDialog = open ? new Element() : null; },
+    async keydown(key) {
+      documentListeners.get('keydown')({ key, target: get('#list'), metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, repeat: false, isComposing: false, keyCode: 0, defaultPrevented: false, preventDefault() {} });
+      await settle();
+    },
     async input(q) { get('#search').value = q; get('#search').listeners.input(); },
     async advance(ms) {
       clock += ms;
@@ -341,4 +348,69 @@ test('Windows and Linux hints use Ctrl while macOS and the demo keep the glyphs'
     ui.views[1].onclick(); await ui.settle();
     assert.equal(ui.get('#preview-meta').children[1].children[0].title, ctrl ? '编辑（Ctrl E）' : '编辑（⌘E）', platform);
   }
+});
+
+test('the pin button pins the panel and follows the state', async t => {
+  const ui = await app(t);
+  ui.bridge.handle = (method, args) => method === 'SetPinned' ? { ...ui.state(), pinned: args[1] } : undefined;
+  assert.equal(ui.get('#pin').attributes['aria-pressed'], 'false');
+  await ui.get('#pin').onclick(); await ui.settle();
+  assert.deepEqual(ui.calls.find(c => c.method === 'SetPinned').args, [1, true]);
+  assert.equal(ui.get('#pin').attributes['aria-pressed'], 'true');
+  assert.equal(ui.get('#pin').title, '取消钉住（⌘P）');
+  assert.equal(ui.get('#pin').attributes['aria-label'], '取消钉住');
+});
+
+const lastDetail = ui => ui.calls.filter(c => c.method === 'Detail').at(-1).args.join();
+
+test('a copy while the panel shows reloads it and keeps the selected entry in place', async t => {
+  const ui = await app(t);
+  await ui.keydown('ArrowDown'); await ui.keydown('ArrowDown');
+  ui.get('#list').scrollTop = 70;
+  ui.bridge.handle = method => method === 'Reload' ? { state: { ...ui.state(), session: 2 }, index: 4 } : undefined;
+  ui.events.get('clipnest:history-changed')(1); await ui.settle();
+  assert.deepEqual(ui.calls.find(c => c.method === 'Reload').args, [1, '', 'all', 'item-2']);
+  assert.equal(lastDetail(ui), '2,item-4');
+  // The row stays 70px below the top of the list, where it was.
+  assert.equal(ui.get('#list').scrollTop, 4 * 70 - 70);
+});
+
+test('a reload keeps the old position when the selected entry is gone', async t => {
+  const ui = await app(t);
+  await ui.keydown('ArrowDown'); await ui.keydown('ArrowDown');
+  ui.bridge.handle = method => method === 'Reload' ? { state: { ...ui.state(), session: 2 }, index: -1 } : undefined;
+  ui.events.get('clipnest:history-changed')(1); await ui.settle();
+  assert.equal(lastDetail(ui), '2,item-2');
+});
+
+test('a copy while the list sits at the top selects the newest entry', async t => {
+  const ui = await app(t);
+  ui.bridge.handle = method => method === 'Reload' ? { state: { ...ui.state(), session: 2 }, index: -1 } : undefined;
+  ui.events.get('clipnest:history-changed')(1); await ui.settle();
+  assert.deepEqual(ui.calls.find(c => c.method === 'Reload').args, [1, '', 'all', '']);
+  assert.equal(lastDetail(ui), '2,item-0');
+});
+
+test('a copy waits for an open dialog and ignores other sessions', async t => {
+  const ui = await app(t);
+  const reloads = () => ui.calls.filter(c => c.method === 'Reload').length;
+  ui.events.get('clipnest:history-changed')(7); await ui.settle();
+  assert.equal(reloads(), 0);
+  ui.dialog(true);
+  ui.events.get('clipnest:history-changed')(1); await ui.advance(300);
+  assert.equal(reloads(), 0);
+  ui.dialog(false); await ui.advance(300);
+  assert.equal(reloads(), 1);
+});
+
+test('a panel broadcast during a reload does not clear the search', async t => {
+  const ui = await app(t);
+  await ui.input('kept'); await ui.advance(60);
+  const reply = deferred();
+  ui.bridge.handle = method => method === 'Reload' ? reply.promise : undefined;
+  ui.events.get('clipnest:history-changed')(1); await ui.settle();
+  ui.events.get('clipnest:panel')({ ...ui.state(), session: 2, target: 'Notes' }); await ui.settle();
+  reply.resolve({ state: { ...ui.state(), session: 2 }, index: -1 }); await ui.settle();
+  assert.equal(ui.get('#search').value, 'kept');
+  assert.equal(ui.get('#destination').textContent, '粘贴到 Notes');
 });

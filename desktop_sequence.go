@@ -23,11 +23,11 @@ func sequenceUnavailable(goos string, sequence *pasteSequence, accessible bool) 
 }
 
 // sequenceOwnWindow reports whether a press of the paste keys belongs to one
-// of Clipnest's own windows. The panel hides when it loses focus, so while it
-// shows it has the keys, even on macOS where it takes them without making
-// Clipnest the front app.
-func sequenceOwnWindow(panelVisible bool, front targetApp) bool {
-	return panelVisible || front.PID == 0
+// of Clipnest's own windows: the panel has the keyboard, which on macOS it
+// takes without making Clipnest the front app, or Clipnest is in front. A
+// pinned panel shows without the keyboard, so showing is not enough.
+func sequenceOwnWindow(panelFocused bool, front targetApp) bool {
+	return panelFocused || front.PID == 0
 }
 
 func writeClipboard(e Entry) error {
@@ -53,7 +53,7 @@ func (d *Desktop) newSequence() *pasteSequence {
 			return nil
 		},
 		self: func() bool {
-			return sequenceOwnWindow(d.win != nil && d.win.IsVisible(), d.n.Target())
+			return sequenceOwnWindow(d.win != nil && d.win.IsVisible() && d.win.IsFocused(), d.n.Target())
 		},
 		send: d.n.PasteHeld,
 		after: func(delay time.Duration, fn func()) func() {
@@ -72,8 +72,9 @@ func (d *Desktop) sequenceRemaining() int {
 }
 
 // StartSequence queues the selected entry and every entry above it in the
-// list the panel shows, then hides the panel. Each ⌘V after that pastes the
-// next one, starting with the selected entry, the oldest of them.
+// list the panel shows, then gives the keyboard back to the app the panel
+// pastes into; a pinned panel stays up. Each ⌘V after that pastes the next
+// one, starting with the selected entry, the oldest of them.
 func (d *Desktop) StartSequence(session uint64, q, kind string, index int, id string) error {
 	var v *historyView
 	var err error
@@ -104,8 +105,8 @@ func (d *Desktop) StartSequence(session uint64, q, kind string, index int, id st
 		if err = d.sequence.start(items); err != nil {
 			return
 		}
-		d.hide()
-		d.n.Activate(d.target)
+		d.trackTarget()
+		d.leavePanel(d.target)
 	})
 	return err
 }

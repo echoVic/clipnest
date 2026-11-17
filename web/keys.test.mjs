@@ -108,3 +108,12 @@ test('busy, open dialogs and IME composition block the keys', () => {
   assert.equal(type(k, { ...mods, isComposing: true }), null, `${k} while composing`);
  }
 });
+test('command P pins the panel from either page', () => {
+ for (const view of ['history', 'phrases']) {
+  assert.equal(type('p', { metaKey: true }, { view }), 'pin'); assert.equal(type('P', { ctrlKey: true }, { view, typing: true }), 'pin');
+  assert.equal(type('p', { metaKey: true }, { view, hasSelection: false }), 'pin');
+  assert.equal(type('p', { metaKey: true, shiftKey: true }, { view }), null); assert.equal(type('p', { metaKey: true }, { view, dialogOpen: true }), null);
+  assert.equal(type('p', { metaKey: true }, { view, menuOpen: true }), null); assert.equal(type('p', { metaKey: true }, { view, busy: true }), null);
+  assert.equal(type('p', {}, { view }), null);
+ }
+});

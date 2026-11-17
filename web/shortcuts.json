@@ -11,6 +11,7 @@
       { "label": "更多操作", "keys": ["⌘ /"], "action": "menu" },
       { "label": "删除选中项", "note": "历史立即删除，常用语先确认；焦点在搜索框时照常删字", "keys": ["⌘ ⌫"], "other": ["Delete"], "action": "delete" },
       { "label": "打开偏好设置", "keys": ["⌘ ,"], "action": "settings" },
+      { "label": "钉住或取消钉住面板", "note": "钉住后切到其他应用、粘贴后面板都不收起", "keys": ["⌘ P"], "action": "pin" },
       { "label": "清空搜索词，再按一次关闭面板", "keys": ["Esc"], "action": ["clear-search", "dismiss"] }
     ]
   },

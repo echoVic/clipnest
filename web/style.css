@@ -168,3 +168,4 @@ dialog.action-menu{position:fixed;inset:auto;margin:0;padding:5px;width:auto;min
 #preferences .ignore-rule-row{padding:9px 0;border-top:1px solid var(--line)}
 .ignore-rule-row code{flex:1;min-width:0;overflow-wrap:anywhere;font:12px/1.6 "SFMono-Regular",Consolas,"Liberation Mono",monospace;color:var(--ink)}
 :root[data-theme=dark] .entry-icon.secret{color:#d0a283}
+.icon-button[aria-pressed=true]{background:var(--selected);color:var(--accent-strong)}

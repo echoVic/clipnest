@@ -3,7 +3,7 @@ import { keyAction } from './keys.js';
 import { entryActions, sequenceBanner } from './actions.js';
 import { ctrlKeys, renderShortcutGroups } from './shortcuts.js';
 import { createDemo } from './demo.js';
-import { DetailCache, DeferredPreview, PagedList, PAGE_SIZE, ScrollRenderQueue, virtualRange, scrollForIndex, acceptPanel, panelReadError, updateSelection, characterCount } from './responsiveness.js';
+import { DetailCache, DeferredPreview, PagedList, PAGE_SIZE, ScrollRenderQueue, virtualRange, scrollForIndex, acceptPanel, panelReadError, updateSelection, characterCount, ROW_HEIGHT } from './responsiveness.js';
 import { looksLikeMarkdown, renderMarkdown } from './markdown.js';
 import { preferencesTabs, preferencesExclusions, preferencesPrivacy } from './preferences.js';
 import { imageTextPreview, imageTextSetting } from './image-text.js';
@@ -38,8 +38,10 @@ const currentEntry = () => pages.entry(pages.selected);
 const context = () => ({ session: state.session, revision: queryVersion, q: $('#search').value, kind, view });
 const blocked = () => busy || queryPending || !!pages.error || pages.retrying || (view === 'history' && state.loading);
 let rows = Object.create(null), paintedSelection = -1, paintedRange = { start: 0, end: 0, total: 0 };
-// A history removal reloads the panel; reselect the same position once the
-// reloaded list for the same search arrives, so ⌘⌫ can be pressed again.
+// A history removal or a reload swaps the snapshot; reselect the same
+// position, or where the selected entry moved, once the reloaded list for the
+// same search arrives, so ⌘⌫ can be pressed again. `top` keeps that row where
+// it was on screen.
 let restore = null, imageTextReady = null, menuReturnFocus = null;
 // The secret shown in full, as `${session}:${id}`. Selecting another entry or
 // closing the panel, which ends the session, masks it again.
@@ -73,6 +75,9 @@ function header() {
   $('#status').replaceChildren(node('i'), document.createTextNode(status));
   $('#pause').replaceChildren(icon(state.paused ? 'play' : 'pause'));
   $('#pause').title = state.paused ? '恢复记录' : '暂停记录'; $('#pause').setAttribute('aria-label', $('#pause').title);
+  const pin = state.pinned ? '取消钉住' : '钉住面板', pinTitle = `${pin}（⌘P）`;
+  $('#pin').title = ctrlPlatform() ? ctrlKeys(pinTitle).replace(/（ /g, '（') : pinTitle;
+  $('#pin').setAttribute('aria-label', pin); $('#pin').setAttribute('aria-pressed', String(!!state.pinned));
   $('#record-pause').checked = !!state.paused;
   $('#record-pause').disabled = busy;
   $('#destination').textContent = state.target ? `粘贴到 ${state.target}` : '选中后可复制';
@@ -275,18 +280,20 @@ async function refresh(keepId, firstPage) {
     } else if (!firstPage) await pages.ensure(0);
     if (version !== queryVersion) return;
     const restored = view === 'history' && !!restore;
+    let restoredTop;
     if (restored) {
-      if (restore.q === $('#search').value && restore.kind === kind) pages.select(restore.index);
+      if (restore.q === $('#search').value && restore.kind === kind) { pages.select(restore.index); restoredTop = restore.top; }
       restore = null;
     }
+    const scrollTo = () => restoredTop ?? scrollForIndex(Math.max(0, pages.selected), 0, $('#list').clientHeight);
     queryPending = !pages.pages.size && !pages.error;
-    $('#list').scrollTop = scrollForIndex(Math.max(0, pages.selected), 0, $('#list').clientHeight);
+    $('#list').scrollTop = scrollTo();
     render();
     // The list hides while the panel reloads: it ignored the scroll above and
     // dropped focus. Scroll again now that it shows; the scroll listener repaints.
     if (restored) {
       const list = $('#list');
-      list.scrollTop = scrollForIndex(Math.max(0, pages.selected), 0, list.clientHeight);
+      list.scrollTop = scrollTo();
       if (document.activeElement === document.body) list.focus({ preventScroll: true });
     }
   } catch (e) {
@@ -516,7 +523,7 @@ async function choose(copyOnly, pick) {
     if (!pages.isCurrent(ticket) || blocked()) return;
     busy = dispatching = true; actionButtons();
     const result = ticket.view === 'phrases' ? await call('InsertPhrase', ticket.session, ticket.id, copyOnly) : await call('Choose', ticket.session, ticket.id, copyOnly);
-    if (demo && !copyOnly) $('#panel').classList.add('dismissed');
+    if (demo && !copyOnly && !state.pinned) $('#panel').classList.add('dismissed');
     toast(result.message);
   } catch (err) { toast(message(err)); }
   finally { choosing = false; if (dispatching) busy = false; render(); }
@@ -672,6 +679,11 @@ async function reorder(delta) {
   reordering = true;
   try { await call('MovePhrase', entry.id, delta); await refresh(entry.id); } catch (err) { toast(message(err)); refresh(entry.id); } finally { reordering = false; }
 }
+async function togglePin() {
+  if (busy) return;
+  try { applyState(await call('SetPinned', state.session, !state.pinned)); } catch (err) { toast(message(err)); }
+}
+$('#pin').onclick = togglePin;
 async function dismiss() {
   if (busy) return;
   invalidateSearch(); ++detailVersion; clearTimeout(queryTimer); queryScheduled = true;
@@ -814,6 +826,7 @@ document.addEventListener('keydown', event => {
     case 'dismiss': dismiss(); break;
     case 'search': $('#search').focus(); break;
     case 'settings': $('#settings').click(); break;
+    case 'pin': togglePin(); break;
     case 'menu': toggleMenu(); break;
     case 'menu-move': moveMenuFocus(action.delta); break;
     case 'select': select(moveIndex(pages.selected, action.delta, pages.total)); if (!typing) $('#list').focus({ preventScroll: true }); break;
@@ -849,7 +862,38 @@ if (!demo) {
     if (revision === appearanceRevision) syncTheme(source);
   }).catch(e => toast(message(e)));
 }
-api.on('clipnest:panel', data => applyState(data, !busy && data.session !== state.session));
+// A copy while the panel shows. Swap in the new snapshot only while nothing
+// holds the old one: on the history page, no dialog or menu, no paste or load.
+let reloading = false, reloadTimer = 0, heldPanel = null;
+const reloadable = () => view === 'history' && !busy && !choosing && !migrating && !state.loading && !queryPending && !$('dialog[open]');
+async function reloadHistory() {
+  clearTimeout(reloadTimer); reloadTimer = 0;
+  if (reloading) return;
+  if (!reloadable()) { reloadTimer = setTimeout(reloadHistory, 300); return; }
+  reloading = true;
+  const session = state.session, list = $('#list'), index = pages.selected, q = $('#search').value;
+  // At the top, follow the newest copy; anywhere else, keep the entry.
+  const follow = index <= 0 && list.scrollTop === 0, offset = index * ROW_HEIGHT - list.scrollTop;
+  try {
+    const { state: next, index: found } = await call('Reload', session, q, kind, follow ? '' : currentEntry()?.id ?? '');
+    if (next.session !== session && session === state.session) {
+      restore = follow ? { index: 0, q, kind } : found >= 0 ? { index: found, q, kind, top: Math.max(0, found * ROW_HEIGHT - offset) } : { index, q, kind };
+    }
+    applyState(next);
+  } catch (err) { toast(message(err)); }
+  finally {
+    reloading = false;
+    const held = heldPanel; heldPanel = null;
+    if (held) applyState(held);
+  }
+}
+api.on('clipnest:history-changed', session => { if (session === state.session) reloadHistory(); });
+// A reload's own reply carries its new session; a broadcast that races it
+// waits, so it is not taken for the panel reopening.
+api.on('clipnest:panel', data => {
+  if (reloading && data.session !== state.session) { heldPanel = data; return; }
+  applyState(data, !busy && data.session !== state.session);
+});
 if (!demo) {
   const applyPreferences = preferences => {
     const root = document.documentElement;

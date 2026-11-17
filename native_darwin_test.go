@@ -8,6 +8,8 @@ import (
 	"reflect"
 	"runtime"
 	"testing"
+
+	"github.com/ebitengine/purego"
 )
 
 // Guards the actual native preflight without touching the user's clipboard,
@@ -126,5 +128,46 @@ func TestNativeCompletedApplicationPickerCannotBeCanceledAgain(t *testing.T) {
 	n.closeApplicationPicker(p)
 	if path := <-p.result; path != "/chosen.app" {
 		t.Fatal("late quit changed a completed selection", path)
+	}
+}
+
+// The panel hands the keyboard back by ordering out and in again; without
+// its fade, which would hide it for a moment, and with the fade restored.
+func TestNativeSuspendAnimationRestoresBehavior(t *testing.T) {
+	const window, setter, getter = 0x10, 1, 2
+	behavior, sets := uintptr(0), []uintptr{}
+	n := &nativeBridge{
+		selector: func(s string) uintptr {
+			switch s {
+			case "setAnimationBehavior:":
+				return setter
+			case "animationBehavior":
+				return getter
+			}
+			t.Fatalf("unexpected message %s", s)
+			return 0
+		},
+		msg: purego.NewCallback(func(o, sel, arg uintptr) uintptr {
+			if o != window {
+				t.Errorf("message to %#x", o)
+			}
+			if sel == setter {
+				behavior = arg
+				sets = append(sets, arg)
+			}
+			return behavior
+		}),
+	}
+	behavior = 4 // NSWindowAnimationBehaviorUtilityWindow
+	restore := n.suspendAnimation(window)
+	if behavior != 2 { // NSWindowAnimationBehaviorNone
+		t.Fatalf("animation left at %d", behavior)
+	}
+	restore()
+	if behavior != 4 || !reflect.DeepEqual(sets, []uintptr{2, 4}) {
+		t.Fatalf("animation restored to %d after %v", behavior, sets)
+	}
+	if restore := n.suspendAnimation(0); restore == nil {
+		t.Fatal("no restore for a missing window")
 	}
 }

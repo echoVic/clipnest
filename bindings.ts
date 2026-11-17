@@ -46,6 +46,15 @@ export interface HistoryPage {
 /** ImageTextState describes an image's recognized text in the preview. */
 export type ImageTextState = "pending" | "ready" | "failed" | "disabled" | "tooLarge" | "needsSQLite" | "unsupported";
 
+/**
+ * PanelReload is a panel with a new snapshot and where the selected entry is
+ * in it, -1 when it is gone or none was given.
+ */
+export interface PanelReload {
+  state: PanelState;
+  index: number;
+}
+
 export interface PanelState {
   session: number;
   entries: Entry[];
@@ -62,6 +71,8 @@ export interface PanelState {
   version: string;
   /** Sequence counts the entries a running paste sequence has left; 0 when none runs. */
   sequence: number;
+  /** Pinned keeps the panel up when it loses the keyboard and after a paste. */
+  pinned: boolean;
 }
 
 export interface PasteResult {
@@ -213,6 +224,15 @@ export const Desktop = {
   promptPastePermission(session: number): Promise<string> {
     return call("Desktop.PromptPastePermission", session);
   },
+  /**
+   * Reload swaps a showing panel's snapshot for a new one. The new snapshot is
+   * opened and read in the background while the old one keeps serving the
+   * panel; only the swap runs on main. It does not broadcast: the panel takes
+   * a broadcast of a new session as reopening and clears its search.
+   */
+  reload(session: number, q: string, kind: string, id: string): Promise<PanelReload> {
+    return call("Desktop.Reload", session, q, kind, id);
+  },
   removeExcludedApp(bundleID: string): Promise<ExcludedApp[]> {
     return call("Desktop.RemoveExcludedApp", bundleID);
   },
@@ -248,10 +268,15 @@ export const Desktop = {
   setImageText(enabled: boolean): Promise<PanelState> {
     return call("Desktop.SetImageText", enabled);
   },
+  /** SetPinned pins or unpins the showing panel. Hiding the panel unpins it. */
+  setPinned(session: number, pinned: boolean): Promise<PanelState> {
+    return call("Desktop.SetPinned", session, pinned);
+  },
   /**
    * StartSequence queues the selected entry and every entry above it in the
-   * list the panel shows, then hides the panel. Each ⌘V after that pastes the
-   * next one, starting with the selected entry, the oldest of them.
+   * list the panel shows, then gives the keyboard back to the app the panel
+   * pastes into; a pinned panel stays up. Each ⌘V after that pastes the next
+   * one, starting with the selected entry, the oldest of them.
    */
   startSequence(session: number, q: string, kind: string, index: number, id: string): Promise<void> {
     return call("Desktop.StartSequence", session, q, kind, index, id);
@@ -272,5 +297,10 @@ export const Desktop = {
 /** Events sent by the Go side. Subscribe with `events.name.on(listener)`. */
 export const events = {
   clipnestPanel: event<PanelState>("clipnest:panel"),
+  /**
+   * historyChanged tells a showing panel, by session, that its snapshot is
+   * behind. The panel asks for Reload when nothing holds the old snapshot.
+   */
+  clipnestHistoryChanged: event<number>("clipnest:history-changed"),
   clipnestAppearance: event<ThemeSource>("clipnest:appearance"),
 } as const;

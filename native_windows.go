@@ -114,6 +114,10 @@ func (n *nativeBridge) acquireForeground() func() {
 	return func() { attach.Call(curThread, fgThread, 0) }
 }
 
+// suspendAnimation is a macOS-only hand-off detail; the pinned panel never
+// hides to give up the keyboard on Windows.
+func (*nativeBridge) suspendAnimation(uintptr) func() { return func() {} }
+
 // Activate brings the window the panel opened from back to the foreground.
 // AttachThreadInput satisfies SetForegroundWindow's foreground lock.
 func (n *nativeBridge) Activate(t targetApp) bool {
