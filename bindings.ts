@@ -60,6 +60,8 @@ export interface PanelState {
   shortcut: string;
   storage: StorageStatus;
   version: string;
+  /** Sequence counts the entries a running paste sequence has left; 0 when none runs. */
+  sequence: number;
 }
 
 export interface PasteResult {
@@ -246,8 +248,19 @@ export const Desktop = {
   setImageText(enabled: boolean): Promise<PanelState> {
     return call("Desktop.SetImageText", enabled);
   },
+  /**
+   * StartSequence queues the selected entry and every entry above it in the
+   * list the panel shows, then hides the panel. Each ⌘V after that pastes the
+   * next one, starting with the selected entry, the oldest of them.
+   */
+  startSequence(session: number, q: string, kind: string, index: number, id: string): Promise<void> {
+    return call("Desktop.StartSequence", session, q, kind, index, id);
+  },
   state(): Promise<PanelState> {
     return call("Desktop.State");
+  },
+  stopSequence(): Promise<PanelState> {
+    return call("Desktop.StopSequence");
   },
   storageStatus(): Promise<StorageStatus> {
     return call("Desktop.StorageStatus");

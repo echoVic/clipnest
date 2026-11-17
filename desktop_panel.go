@@ -22,6 +22,7 @@ func (d *Desktop) ready() {
 		log.Fatal("无法初始化系统剪贴板：", err)
 	}
 	d.clipboardAccess = d.n.ClipboardAccess()
+	d.sequence = d.newSequence()
 	d.win = mygo.NewWindow(mygo.WindowOptions{
 		Title: "Clipnest · 剪贴板历史", URL: "/",
 		Width: panelWidth, Height: panelHeight,

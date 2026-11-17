@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
@@ -29,8 +30,19 @@ func trayIcon() []byte {
 	return b.Bytes()
 }
 
-func (d *Desktop) createTray() {
-	menu := mygo.NewMenu([]*mygo.MenuItem{
+func (d *Desktop) trayToolTip() string { return "Clipnest · " + d.shortcut + " 打开剪贴板历史" }
+
+// trayMenu is built when it opens, so it reflects a running paste sequence.
+func (d *Desktop) trayMenu() *mygo.Menu {
+	items := []*mygo.MenuItem{}
+	if n := d.sequenceRemaining(); n > 0 {
+		items = append(items, &mygo.MenuItem{Label: fmt.Sprintf("停止顺序粘贴（剩 %d 条）", n), Click: func(*mygo.MenuItem, *mygo.Window) {
+			if d.sequence != nil {
+				d.sequence.stop("")
+			}
+		}}, mygo.Separator())
+	}
+	return mygo.NewMenu(append(items, []*mygo.MenuItem{
 		{Label: "打开 Clipnest", Click: func(*mygo.MenuItem, *mygo.Window) { d.openPanel() }},
 		{Label: "偏好设置…", Accelerator: "CmdOrCtrl+,", Click: func(*mygo.MenuItem, *mygo.Window) { d.OpenPreferences() }},
 		{Label: "暂停 / 恢复记录", Click: func(*mygo.MenuItem, *mygo.Window) {
@@ -50,21 +62,24 @@ func (d *Desktop) createTray() {
 		}},
 		mygo.Separator(),
 		{Label: "退出 Clipnest", Click: func(*mygo.MenuItem, *mygo.Window) { mygo.App.Quit() }},
-	})
+	}...))
+}
+
+func (d *Desktop) createTray() {
 	var err error
-	d.tray, err = mygo.NewTray(mygo.TrayOptions{Icon: trayIcon(), IconIsTemplate: runtime.GOOS == "darwin", ToolTip: "Clipnest · " + d.shortcut + " 打开剪贴板历史"})
+	d.tray, err = mygo.NewTray(mygo.TrayOptions{Icon: trayIcon(), IconIsTemplate: runtime.GOOS == "darwin", ToolTip: d.trayToolTip()})
 	if err != nil {
 		d.notice = "菜单栏图标不可用，仍可使用全局快捷键"
 		return
 	}
 	if runtime.GOOS == "linux" {
-		d.tray.SetMenu(menu)
+		d.tray.SetMenu(d.trayMenu())
 		return
 	}
 	d.tray.OnClick(d.show)
 	d.tray.OnRightClick(func() {
 		d.hide()
-		d.tray.SetMenu(menu)
+		d.tray.SetMenu(d.trayMenu())
 		defer d.tray.SetMenu(nil)
 		d.tray.PopUpMenu()
 	})
