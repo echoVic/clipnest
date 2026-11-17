@@ -1,11 +1,11 @@
 import { moveIndex, indexAfterRemoval, WheelSelection } from './selection.js';
 import { keyAction } from './keys.js';
-import { entryActions } from './actions.js';
+import { entryActions, sequenceBanner } from './actions.js';
 import { ctrlKeys, renderShortcutGroups } from './shortcuts.js';
 import { createDemo } from './demo.js';
 import { DetailCache, DeferredPreview, PagedList, PAGE_SIZE, ScrollRenderQueue, virtualRange, scrollForIndex, acceptPanel, panelReadError, updateSelection, characterCount } from './responsiveness.js';
 import { looksLikeMarkdown, renderMarkdown } from './markdown.js';
-import { preferencesTabs, preferencesExclusions } from './preferences.js';
+import { preferencesTabs, preferencesExclusions, preferencesPrivacy } from './preferences.js';
 import { imageTextPreview, imageTextSetting } from './image-text.js';
 
 const $ = s => document.querySelector(s);
@@ -41,6 +41,9 @@ let rows = Object.create(null), paintedSelection = -1, paintedRange = { start: 0
 // A history removal reloads the panel; reselect the same position once the
 // reloaded list for the same search arrives, so ⌘⌫ can be pressed again.
 let restore = null, imageTextReady = null, menuReturnFocus = null;
+// The secret shown in full, as `${session}:${id}`. Selecting another entry or
+// closing the panel, which ends the session, masks it again.
+let revealed = '';
 const listRange = () => {
   const list = $('#list'), total = pages.error ? 0 : pages.total;
   return { ...virtualRange(total, list.scrollTop, list.clientHeight || 280), total };
@@ -76,6 +79,8 @@ function header() {
   $('#shortcut-label').textContent = state.shortcut;
   $('#app-version').textContent = `Clipnest ${state.version || '开发版'}`;
   $('#notice').hidden = !state.notice; $('#notice').textContent = state.notice;
+  const banner = sequenceBanner(state.sequence, ctrlPlatform());
+  $('#sequence-banner').hidden = !banner; $('#sequence-text').textContent = banner;
   $('#count').textContent = state.total;
   const pastePlatform = state.platform === 'darwin' || state.platform === 'windows';
   $('#permission-status').textContent = demo ? '演示模式，桌面版可粘贴到原应用。' : !pastePlatform ? '此系统使用「仅复制」，自动粘贴支持 macOS 与 Windows。' : state.accessible ? '已允许，选完即可粘贴到原应用。' : '允许辅助功能，选完直接粘贴。';
@@ -324,8 +329,9 @@ function renderWindow(range = listRange()) {
       button.disabled = true; button.classList.add('entry-loading'); button.textContent = '正在加载…';
       missing.add(Math.floor(i / PAGE_SIZE) * PAGE_SIZE); continue;
     }
-    button.setAttribute('aria-label', phrases ? `${i + 1}，${e.excerpt}` : `${i + 1}，${e.title}，${labels[e.kind] || '文字'}`);
-    const type = node('span', `entry-icon ${phrases ? 'text' : e.kind}`); type.append(icon(phrases ? 'text' : e.kind));
+    button.setAttribute('aria-label', phrases ? `${i + 1}，${e.excerpt}` : `${i + 1}，${e.title}，${e.secret || labels[e.kind] || '文字'}`);
+    const glyph = phrases ? 'text' : e.secret ? 'lock' : e.kind;
+    const type = node('span', `entry-icon ${e.secret && !phrases ? 'secret' : glyph}`); type.append(icon(glyph));
     const copy = node('span', 'entry-copy');
     if (phrases) copy.append(node('div', 'entry-excerpt', e.excerpt));
     else {
@@ -397,14 +403,19 @@ async function updatePreview() {
     const empty = node('div', 'preview-placeholder'); empty.append(icon('copy'), node('span', '', view === 'phrases' ? '存好的常用语会显示在这里。' : '留住刚才复制的好内容。')); $('#preview-body').replaceChildren(empty); return;
   }
   if (view === 'phrases') return phrasePreview(entry, version);
-  $('#type-label').textContent = labels[entry.kind] || '文字';
+  $('#type-label').textContent = entry.secret || labels[entry.kind] || '文字';
   $('#preview-body').replaceChildren(node('p', 'preview-text', entry.excerpt));
   try {
     const session = state.session;
     const e = await details.get(`history:${session}:${entry.id}`, () => call('Detail', session, entry.id));
     if (version !== detailVersion || !e) return;
     let content, imageText;
-    if (e.kind === 'image') {
+    const key = `${session}:${e.id}`;
+    if (revealed !== key) revealed = '';
+    const masked = !!e.secret && revealed !== key;
+    if (masked) {
+      content = node('p', 'preview-text', e.masked);
+    } else if (e.kind === 'image') {
       const stage = node('div', 'image-stage'); const img = new Image(); img.alt = e.title; img.src = `data:image/png;base64,${e.image}`; stage.append(img);
       imageText = imageTextPreview(document, e, () => copyImageText(session, e.id));
       content = stage;
@@ -434,9 +445,21 @@ async function updatePreview() {
     const remove = node('button', 'icon-button delete-entry'); remove.title = `移除此条记录（${ctrlPlatform() ? 'Delete' : '⌘⌫'}）`; remove.setAttribute('aria-label', '移除此条记录'); remove.append(icon('trash'));
     remove.onclick = () => { if (session === state.session && currentEntry()?.id === e.id) removeEntry(); };
     imageTextReady = imageText?.button ? e.id : null;
-    const actions = node('span', 'meta-actions'); actions.append(...(imageText?.button ? [imageText.button] : []), remove, moreButton());
+    const actions = node('span', 'meta-actions'); actions.append(...(e.secret ? [revealButton(session, e.id, masked)] : []), ...(imageText?.button ? [imageText.button] : []), remove, moreButton());
     $('#preview-meta').replaceChildren(info, actions);
   } catch (err) { if (version === detailVersion) toast(message(err)); }
+}
+// Paste and copy always use the original; this only changes what the preview shows.
+function revealButton(session, id, masked) {
+  const button = node('button', 'reveal-secret', masked ? '显示' : '隐藏'); button.type = 'button';
+  button.title = masked ? '显示原文' : '恢复遮罩'; button.setAttribute('aria-pressed', String(!masked));
+  button.onclick = async () => {
+    if (session !== state.session || currentEntry()?.id !== id) return;
+    revealed = masked ? `${session}:${id}` : '';
+    await updatePreview();
+    $('#preview-meta .reveal-secret')?.focus();
+  };
+  return button;
 }
 // Copy-only: the text goes to the clipboard and never becomes a history entry.
 async function copyImageText(session, id) {
@@ -553,6 +576,7 @@ async function saveAsPhrase() {
   if (draft) return openEditor();
   const entry = currentEntry(), session = state.session; if (!entry) return;
   if (entry.kind === 'image') { toast('图片不能存为常用语'); return; }
+  if (entry.secret) { toast('含密钥的内容不能存为常用语'); return; }
   try {
     const e = await details.get(`history:${session}:${entry.id}`, () => call('Detail', session, entry.id));
     if (!e || session !== state.session || currentEntry()?.id !== entry.id || draft) return;
@@ -571,6 +595,22 @@ async function openLink() {
     if (/^https?:\/\//i.test(url)) window.open(url, '_blank', 'noopener,noreferrer'); else toast('只有链接可以打开');
   } catch (err) { toast(message(err)); }
 }
+// The selected entry and every one above it wait for ⌘V once the panel hides.
+async function startSequence() {
+  if (blocked() || choosing) return;
+  choosing = true; actionButtons();
+  try {
+    const ticket = await pages.pick();
+    if (!pages.isCurrent(ticket) || blocked() || ticket.view !== 'history') return;
+    await call('StartSequence', ticket.session, ticket.q, ticket.kind, ticket.index, ticket.id);
+    if (demo) toast(`演示：已开始顺序粘贴 ${ticket.index + 1} 条，桌面版每次 ⌘V 粘贴下一条`);
+  } catch (err) { toast(message(err)); }
+  finally { choosing = false; actionButtons(); }
+}
+async function stopSequence() {
+  try { applyState(await call('StopSequence')); toast('已停止顺序粘贴'); } catch (err) { toast(message(err)); }
+}
+$('#sequence-stop').onclick = stopSequence;
 // Menu items and shortcuts share one dispatcher, so both behave the same.
 function perform(action) {
   switch (action.type) {
@@ -578,6 +618,7 @@ function perform(action) {
     case 'copy': choose(true); break;
     case 'edit': editPhrase(); break;
     case 'reorder': reorder(action.delta); break;
+    case 'sequence': startSequence(); break;
     case 'save-phrase': saveAsPhrase(); break;
     case 'open-link': openLink(); break;
     case 'image-text': { const e = currentEntry(); if (e && imageTextReady === e.id) copyImageText(state.session, e.id); break; }
@@ -595,7 +636,7 @@ function toggleMenu() {
   if (menu.open) { menu.close(); return; }
   const entry = currentEntry(); if (!entry || blocked() || choosing) return;
   const items = $('#action-menu-items'); items.replaceChildren();
-  for (const action of entryActions({ view, kind: entry.kind, imageText: imageTextReady === entry.id, index: pages.selected, total: pages.total, hasQuery: !!$('#search').value, ctrl: ctrlPlatform() })) {
+  for (const action of entryActions({ view, kind: entry.kind, secret: !!entry.secret, imageText: imageTextReady === entry.id, index: pages.selected, total: pages.total, hasQuery: !!$('#search').value, ctrl: ctrlPlatform(), sequence: demo || state.platform === 'darwin' || state.platform === 'windows' })) {
     if (action.danger) { const line = node('div', 'menu-separator'); line.setAttribute('role', 'separator'); items.append(line); }
     const item = node('button', `menu-item${action.danger ? ' menu-danger' : ''}`); item.type = 'button'; item.setAttribute('role', 'menuitem');
     item.append(node('span', '', action.label)); if (action.shortcut) item.append(node('kbd', '', action.shortcut));
@@ -659,6 +700,7 @@ const pauseRecording = async () => {
 $('#pause').onclick = $('#record-pause').onchange = pauseRecording;
 preferencesTabs($('#preferences'));
 const exclusions = preferencesExclusions(document, { call, demo });
+const privacySettings = preferencesPrivacy(document, { call });
 // The demo lists the same keys as the native preferences window.
 let shortcutsShown = false;
 async function showShortcuts() {
@@ -682,6 +724,7 @@ $('#settings').onclick = async () => {
   $('#preferences').showModal();
   showShortcuts();
   await exclusions.refresh();
+  await privacySettings.refresh();
   try { state.accessible = await call('Permission'); state.clipboardAccess = await call('ClipboardPermission'); header(); }
   catch (e) { toast(message(e)); }
 };

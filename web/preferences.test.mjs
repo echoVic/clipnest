@@ -161,3 +161,72 @@ test('remove failures preserve rules and recover busy state without touching any
   assert.equal(elements['excluded-apps-list'].children.length, 0);
   assert.equal(elements['excluded-apps-error'].hidden, true);
 });
+
+function privacyFixture(call) {
+  const document = { activeElement: null };
+  document.createElement = tag => new Element(tag, document);
+  const ids = ['sensitive-group', 'secrets-mode', 'clear-sync', 'ignore-rule', 'ignore-add', 'ignore-list', 'ignore-empty', 'privacy-error'];
+  const elements = Object.fromEntries(ids.map(id => [id, document.createElement(id === 'secrets-mode' ? 'select' : 'div')]));
+  document.querySelector = selector => {
+    assert.ok(elements[selector.slice(1)], `unexpected access outside sensitive content: ${selector}`);
+    return elements[selector.slice(1)];
+  };
+  assert.equal(typeof preferences.preferencesPrivacy, 'function', 'sensitive content controller is missing');
+  return { controller: preferences.preferencesPrivacy(document, { call }), elements, document };
+}
+const ruleButtons = elements => elements['ignore-list'].querySelectorAll('button');
+
+test('sensitive content preferences save the whole settings value for each change', async () => {
+  let settings = { secrets: 'mask', clearSync: true, ignore: ['<b>^\\d{6}$</b>'] };
+  const calls = [];
+  const { controller, elements } = privacyFixture(async (method, ...args) => {
+    calls.push([method, ...args]);
+    if (method === 'SavePrivacy') settings = structuredClone(args[0]);
+    return structuredClone(settings);
+  });
+  await controller.refresh();
+  assert.equal(elements['secrets-mode'].value, 'mask');
+  assert.equal(elements['clear-sync'].checked, true);
+  assert.ok(elements['ignore-list'].textContent.includes('<b>^\\d{6}$</b>'), 'rules render as text');
+  assert.equal(elements['ignore-empty'].hidden, true);
+
+  elements['secrets-mode'].value = 'skip';
+  await elements['secrets-mode'].listeners.get('change')();
+  elements['clear-sync'].checked = false;
+  await elements['clear-sync'].listeners.get('change')();
+  elements['ignore-rule'].value = '  (?i)internal ';
+  await elements['ignore-add'].click();
+  assert.equal(elements['ignore-rule'].value, '', 'a saved rule leaves the input');
+  const remove = ruleButtons(elements)[0];
+  assert.equal(remove.getAttribute('aria-label'), '移除 <b>^\\d{6}$</b>');
+  await remove.click();
+  assert.deepEqual(calls.filter(([method]) => method === 'SavePrivacy').map(([, s]) => s), [
+    { secrets: 'skip', clearSync: true, ignore: ['<b>^\\d{6}$</b>'] },
+    { secrets: 'skip', clearSync: false, ignore: ['<b>^\\d{6}$</b>'] },
+    { secrets: 'skip', clearSync: false, ignore: ['<b>^\\d{6}$</b>', '(?i)internal'] },
+    { secrets: 'skip', clearSync: false, ignore: ['(?i)internal'] },
+  ]);
+});
+
+test('a rejected rule keeps the draft, shows why and rereads the settings', async () => {
+  const settings = { secrets: 'mask', clearSync: true, ignore: [] };
+  const calls = [];
+  const { controller, elements } = privacyFixture(async (method, ...args) => {
+    calls.push(method);
+    if (method === 'SavePrivacy') throw Error('忽略规则「(」不是有效的正则表达式');
+    return structuredClone(settings);
+  });
+  await controller.refresh();
+  assert.equal(elements['ignore-empty'].hidden, false);
+  elements['ignore-rule'].value = '(';
+  await elements['ignore-rule'].listeners.get('keydown')({ key: 'Enter', isComposing: false, preventDefault() {} });
+  assert.equal(elements['ignore-rule'].value, '(');
+  assert.match(elements['privacy-error'].textContent, /不是有效的正则表达式/);
+  assert.equal(elements['privacy-error'].hidden, false);
+  assert.deepEqual(calls, ['Privacy', 'SavePrivacy', 'Privacy']);
+  assert.equal(elements['ignore-add'].disabled, false);
+  assert.equal(elements['sensitive-group'].getAttribute('aria-busy'), 'false');
+  elements['ignore-rule'].value = '   ';
+  await elements['ignore-add'].click();
+  assert.deepEqual(calls, ['Privacy', 'SavePrivacy', 'Privacy'], 'a blank draft is not sent');
+});

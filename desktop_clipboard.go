@@ -4,6 +4,7 @@ import (
 	"errors"
 	"runtime"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -42,6 +43,9 @@ type clipboardReader interface {
 	ReadFormat(transfer.Format) ([]byte, error)
 	ReadImage() []byte
 	Target() targetApp
+	// Empty reports a clipboard that holds nothing. Unlike an empty format
+	// list, it is never a clipboard another app has open.
+	Empty() bool
 }
 
 type systemClipboard struct {
@@ -178,6 +182,12 @@ func (d *Desktop) captureFrom(c clipboardReader, request bool) (bool, error) {
 	if !d.clipboardAccess.permitsRead(request) {
 		return false, nil
 	}
+	// A clear holds no content, so it counts whichever app is in front.
+	if c.Empty() {
+		d.forgetCleared(rev)
+		d.lastRevision = rev
+		return false, nil
+	}
 	source := d.observedSource
 	if runtime.GOOS == "darwin" && d.storage != nil {
 		rules := d.storage.Exclusions
@@ -195,6 +205,7 @@ func (d *Desktop) captureFrom(c clipboardReader, request bool) (bool, error) {
 	}
 	var e Entry
 	var err error
+	blank := false
 	portable := c.Formats()
 	if slices.Contains(portable, transfer.FileList) {
 		d.lastRevision = rev
@@ -212,6 +223,7 @@ func (d *Desktop) captureFrom(c clipboardReader, request bool) (bool, error) {
 		if readErr != nil {
 			return false, readErr
 		}
+		blank = strings.TrimSpace(string(data)) == ""
 		e, err = newEntry(string(data), nil, source.Name)
 	} else if slices.Contains(portable, transfer.PNG) || slices.Contains(formats, "public.tiff") {
 		data := c.ReadImage()
@@ -224,8 +236,11 @@ func (d *Desktop) captureFrom(c clipboardReader, request bool) (bool, error) {
 	if !d.clipboardAccess.permitsRead(request) || (rev >= 0 && c.Revision() != rev) {
 		return false, nil
 	}
+	if blank {
+		d.forgetCleared(rev)
+	}
 	d.lastRevision = rev
-	if err != nil {
+	if err != nil || !d.applyPrivacy(&e) {
 		return false, nil
 	}
 	if rev < 0 && e.ID == d.lastID {
@@ -235,7 +250,52 @@ func (d *Desktop) captureFrom(c clipboardReader, request bool) (bool, error) {
 	if err := d.h.Add(e); err != nil {
 		return false, err
 	}
+	d.recent = recentCopy{id: e.ID, revision: rev, at: time.Now()}
 	return true, nil
+}
+
+// applyPrivacy applies the ignore rules and the secret setting to a text copy,
+// masking it in place. It reports whether the copy is still recorded.
+func (d *Desktop) applyPrivacy(e *Entry) bool {
+	if e.Kind == "image" || d.storage == nil {
+		return true
+	}
+	privacy := d.storage.Privacy
+	if privacy.Ignored(e.Text) {
+		return false
+	}
+	switch privacy.Settings().Secrets {
+	case secretsSkip:
+		return len(findSecrets(e.Text)) == 0
+	case secretsMask:
+		e.mask()
+	}
+	return true
+}
+
+// Password managers clear the clipboard a while after a copy.
+const clearSyncWindow = 5 * time.Minute
+
+// recentCopy is the copy capture recorded last.
+type recentCopy struct {
+	id       string
+	revision int64
+	at       time.Time
+}
+
+// forgetCleared removes the copy recorded last when the clipboard change right
+// after it, at rev, is a clear within clearSyncWindow. Any change in between,
+// including Clipnest's own writes, moves lastRevision past the copy. Main
+// thread; call it before lastRevision moves to rev.
+func (d *Desktop) forgetCleared(rev int64) {
+	recent := d.recent
+	d.recent = recentCopy{}
+	if recent.id == "" || rev < 0 || recent.revision != d.lastRevision || time.Since(recent.at) > clearSyncWindow {
+		return
+	}
+	if d.storage != nil && d.storage.Privacy.Settings().ClearSync {
+		d.h.Remove(recent.id)
+	}
 }
 
 func (d *Desktop) monitor() {

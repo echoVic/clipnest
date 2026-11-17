@@ -5,6 +5,8 @@ const samples = [
   ['text', '好的设计，是让复杂的事轻轻发生。', '好的设计，是让复杂的事轻轻发生。\n\n复制时不必整理，\n需要时总能找到。\n\n把注意力留给正在做的事，\n剩下的，交给 Clipnest。', '备忘录'],
   ['image', '复制的图片', '', '截图'],
   ['link', 'https://www.are.na/', 'https://www.are.na/', 'Safari'],
+  // The access key ID from the AWS documentation; the demo shows it masked.
+  ['text', '', 'export AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE\nexport AWS_REGION=us-east-1', '终端'],
   ['code', 'const littleThings = makeLifeBetter()', 'const littleThings = makeLifeBetter()\n\nconst clipboard = {\n  capture: "effortless",\n  find: "instant",\n  paste: "right where you left off"\n}\n\nexport default clipboard', 'Visual Studio Code'],
   ['text', '周末计划：去海边，等一场日落。', '周末计划：去海边，等一场日落。\n带上相机，还有一直没读完的那本书。', '备忘录'],
   ['text', '#B8A7E8 · 一点温柔的紫色', '#B8A7E8', 'Figma'],
@@ -28,11 +30,32 @@ export const sampleApps = Object.freeze([
 ].map(Object.freeze));
 // Same excerpt and limits as phrases.go, so the demo shows what the app would.
 const excerpt = text => { const flat = [...text.trim().split(/\s+/).join(' ')]; return flat.length > 140 ? flat.slice(0, 140).join('') + '…' : flat.join(''); };
+// The demo recognizes only AWS access keys, masked as secrets.go masks them.
+const maskKeys = text => text.replace(/\b(AKIA|ASIA)[0-9A-Z]{16}\b/g, key => `${key.slice(0, 4)}••••${key.slice(-4)}`);
+// The same checks and messages as privacy.go. JavaScript has no (?i) group,
+// so a leading one becomes the i flag.
+function checkPrivacy({ secrets, clearSync, ignore }) {
+  if (!['mask', 'skip', 'off'].includes(secrets)) throw Error('密钥识别设置无效');
+  ignore = Array.isArray(ignore) ? ignore : [];
+  if (ignore.length > 64) throw Error('最多 64 条忽略规则');
+  ignore.forEach((rule, i) => {
+    if (typeof rule !== 'string' || !rule.trim()) throw Error('忽略规则不能为空');
+    if (new TextEncoder().encode(rule).length > 512) throw Error('忽略规则不能超过 512 字节');
+    if (ignore.indexOf(rule) < i) throw Error(`忽略规则「${rule}」重复`);
+    let re;
+    try { re = rule.startsWith('(?i)') ? new RegExp(rule.slice(4), 'i') : new RegExp(rule); }
+    catch { throw Error(`忽略规则「${rule}」不是有效的正则表达式`); }
+    if (re.test('')) throw Error(`忽略规则「${rule}」会匹配所有内容`);
+  });
+  return { secrets, clearSync: !!clearSync, ignore: [...ignore] };
+}
 export function createDemo({ version = '开发版', accessible = true, legacyStorage = false, large = false, clipboardAccess = 'allowed' } = {}) {
   let entries = Array.from({ length: large ? 10000 : samples.length }, (_, i) => {
     const [kind, title, text, source] = samples[i % samples.length];
     const e = { id: `sample-${i}`, kind, title: large ? `${i + 1} · ${title}` : title, text, source, excerpt: excerpt(text), created: now - i * 125000 };
     if (kind === 'image') Object.assign(e, { image: demoImagePNG, ...demoImageSize, excerpt: `${demoImageSize.width} × ${demoImageSize.height} · PNG` });
+    const masked = maskKeys(text);
+    if (masked !== text) Object.assign(e, { secret: 'AWS 访问密钥', masked, title: (large ? `${i + 1} · ` : '') + masked.trim().split('\n')[0], excerpt: excerpt(masked) });
     return e;
   });
   let session = 0, revision = 0, paused = false, loading = false, readyTimer;
@@ -42,7 +65,7 @@ export function createDemo({ version = '开发版', accessible = true, legacySto
   // the feature is on and the history is in SQLite.
   const recognized = e => e.kind === 'image' && storage.backend === 'sqlite' && storage.imageText;
   const titled = e => recognized(e) ? { ...e, title: demoImageText.split('\n')[0] } : e;
-  const searchable = e => (recognized(e) ? demoImageText : '') + e.text + titled(e).title + e.source;
+  const searchable = e => (recognized(e) ? demoImageText : '') + (e.secret ? e.masked : e.text) + titled(e).title + e.source;
   const imageDetail = e => {
     if (e.kind !== 'image') return {};
     if (storage.backend !== 'sqlite') return { imageTextState: 'needsSQLite' };
@@ -56,9 +79,11 @@ export function createDemo({ version = '开发版', accessible = true, legacySto
     if (!text.trim()) throw new Error('内容不能为空');
     if (new TextEncoder().encode(text).length > 64 << 10) throw new Error('单条常用语最多 64 KB');
   };
-  const summary = e => ({ ...titled(e), text: undefined, image: undefined });
+  const summary = e => ({ ...titled(e), text: undefined, image: undefined, masked: undefined });
+  let privacy = checkPrivacy({ secrets: 'mask', clearSync: true, ignore: [] });
   const status = () => ({ ...storage, retention: { ...storage.retention } });
-  const state = () => ({ session, loading, total: entries.length, entries: loading ? [] : entries.slice(0, 50).map(summary), paused, clipboardAccess, accessible, version, target: '备忘录', platform: 'demo', notice: '', shortcut: '⌘ ⇧ V', storage: status() });
+  let sequence = 0;
+  const state = () => ({ session, loading, total: entries.length, entries: loading ? [] : entries.slice(0, 50).map(summary), paused, clipboardAccess, accessible, version, target: '备忘录', platform: 'demo', notice: '', shortcut: '⌘ ⇧ V', storage: status(), sequence });
   const emit = () => { for (const fn of listeners) fn(state()); };
   const fresh = (publishLoading = false) => {
     session++; revision = 0; loading = true; clearTimeout(readyTimer);
@@ -80,6 +105,8 @@ export function createDemo({ version = '开发版', accessible = true, legacySto
       case 'State': return fresh(true);
       case 'StorageStatus': return status();
       case 'ExcludedApps': return exclusions();
+      case 'Privacy': return checkPrivacy(privacy);
+      case 'SavePrivacy': privacy = checkPrivacy(args[0] || {}); return checkPrivacy(privacy);
       case 'AddExcludedApp': {
         if (args[0] == null) return exclusions();
         const app = sampleApps.find(app => app.id === args[0]);
@@ -131,6 +158,19 @@ export function createDemo({ version = '开发版', accessible = true, legacySto
         storage = { ...storage, imageText: !!args[0] };
         return fresh();
       case 'Choose': checkSession(args[0]); historyEntry(args[1]); return { copied: false, pasted: false, message: args[2] ? '演示：内容已选中，未更改系统剪贴板' : '演示：已选择粘贴，未发送系统按键' };
+      // The demo only counts the queue; it never takes over ⌘V.
+      case 'StartSequence': {
+        const [id, q, kind, index, entryID] = args;
+        checkSession(id);
+        if (!Number.isSafeInteger(index) || index < 1) throw Error('至少需要 2 条才能顺序粘贴');
+        if (index >= 100) throw Error('顺序粘贴最多 100 条，请从更近的一条开始');
+        const matches = entries.filter(e => (kind === 'all' || e.kind === kind) && searchable(e).toLowerCase().includes(q.toLowerCase().trim()));
+        if (matches[index]?.id !== entryID) throw Error('列表已更新，请重新选择');
+        sequence = index + 1;
+        emit();
+        return null;
+      }
+      case 'StopSequence': sequence = 0; return state();
       case 'Pause': paused = args[0]; return state();
       case 'Delete': checkSession(args[0]); historyEntry(args[1]); entries = entries.filter(e => e.id !== args[1]); return fresh();
       case 'Clear': entries = []; return fresh();

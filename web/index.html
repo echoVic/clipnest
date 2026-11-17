@@ -26,6 +26,7 @@
 <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
 <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16Z"/><path d="m13.5 6.5 4 4"/></symbol>
 <symbol id="i-storage" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
 <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M6.25 10h1M9.75 10h1M13.25 10h1M16.75 10h1M8 14h8"/></symbol>
 </defs></svg>
 <div class="demo-top" aria-hidden="true"><span class="demo-wordmark">clipnest<span>®</span></span><span>给复制的内容，一个落脚处。</span></div>
@@ -36,6 +37,7 @@
     <div class="header-right"><span class="status" id="status"><i></i>正在记录</span><button id="pause" class="icon-button" title="暂停记录" aria-label="暂停记录"><svg><use href="#i-pause"/></svg></button><button id="settings" class="icon-button" title="偏好设置（⌘,）" aria-label="偏好设置"><svg><use href="#i-sliders"/></svg></button></div>
   </header>
   <div id="notice" class="notice" hidden></div>
+  <section id="sequence-banner" class="sequence-banner" aria-label="顺序粘贴" hidden><span id="sequence-text" role="status"></span><button id="sequence-stop" type="button" class="secondary">停止</button></section>
   <section id="storage-upgrade" class="storage-upgrade" aria-label="本地存储升级" hidden>
     <div class="migration-copy"><strong id="migration-title">升级本地存储</strong><p id="migration-description"></p><p id="migration-error" class="field-error" role="alert" hidden></p></div>
     <div class="migration-actions"><button id="migration-later" type="button" class="link-button">稍后</button><button id="migrate-storage" type="button" class="secondary">一键迁移</button></div>
@@ -87,10 +89,19 @@
         <p id="excluded-apps-empty" class="excluded-apps-status" role="status" hidden></p>
         <p id="excluded-apps-error" class="field-error" role="alert" hidden></p><button id="excluded-apps-retry" type="button" class="link-button" hidden>重试加载</button>
       </section>
+      <section id="sensitive-group" class="settings-group" aria-labelledby="sensitive-title" aria-busy="false"><h3 id="sensitive-title">敏感内容</h3>
+        <div class="setting-row"><div><label for="secrets-mode">密钥、令牌与银行卡号</label><p>识别常见格式的密钥、令牌，以及整条复制的银行卡号。遮罩后列表和搜索只显示首尾，粘贴仍是原文。</p></div><select id="secrets-mode"><option value="mask">遮罩后记录</option><option value="skip">不记录</option><option value="off">不识别</option></select></div>
+        <div class="setting-row"><div><label for="clear-sync">清空时删除</label><p id="clear-sync-note">复制后 5 分钟内剪贴板被清空（密码管理器常这样做）时，删除刚记下的那条。</p></div><input id="clear-sync" class="setting-switch" type="checkbox" role="switch" aria-describedby="clear-sync-note"></div>
+        <div class="setting-row ignore-rule-field"><div><label for="ignore-rule">忽略内容</label><p id="ignore-rule-note">文字匹配任一正则表达式时不记录，图片不受影响。区分大小写，可用 (?i)、^、$。</p></div></div>
+        <div class="ignore-rule-input"><input id="ignore-rule" type="text" placeholder="例如 ^\d{6}$" spellcheck="false" autocomplete="off" aria-describedby="ignore-rule-note"><button id="ignore-add" type="button" class="secondary">添加</button></div>
+        <ul id="ignore-list" class="ignore-list" aria-label="忽略规则"></ul>
+        <p id="ignore-empty" class="excluded-apps-status" role="status" hidden>尚未添加规则</p>
+        <p id="privacy-error" class="field-error" role="alert" hidden></p>
+      </section>
       <section class="settings-group" aria-labelledby="image-text-title"><h3 id="image-text-title">图片文字</h3>
         <div class="setting-row"><div><label for="image-text-toggle">识别图片文字</label><p id="image-text-status"></p></div><input id="image-text-toggle" class="setting-switch" type="checkbox" role="switch" aria-describedby="image-text-status"></div>
       </section>
-      <p class="settings-note"><svg><use href="#i-shield"/></svg><span>文字与图片仅保存在这台电脑。标记为机密的内容不会记录。</span></p>
+      <p class="settings-note"><svg><use href="#i-shield"/></svg><span>文字与图片仅保存在这台电脑。标记为机密的内容不会记录，识别到的密钥会遮罩。</span></p>
     </section>
     <section id="preferences-storage" role="tabpanel" aria-labelledby="preferences-storage-tab" hidden>
       <section class="settings-group" aria-labelledby="storage-group-title"><h3 id="storage-group-title">本地存储</h3>

@@ -26,6 +26,10 @@ export interface Entry {
   imageText?: string;
   /** detail only, images */
   imageTextState?: ImageTextState;
+  /** type of the first secret; title, excerpt and search are masked */
+  secret?: string;
+  /** detail only: the text with its secrets masked */
+  masked?: string;
 }
 
 export interface ExcludedApp {
@@ -56,6 +60,8 @@ export interface PanelState {
   shortcut: string;
   storage: StorageStatus;
   version: string;
+  /** Sequence counts the entries a running paste sequence has left; 0 when none runs. */
+  sequence: number;
 }
 
 export interface PasteResult {
@@ -72,6 +78,14 @@ export interface Phrase {
   id: string;
   text?: string;
   excerpt?: string;
+}
+
+export interface PrivacySettings {
+  secrets: string;
+  /** forget the last capture when the clipboard is cleared */
+  clearSync: boolean;
+  /** RE2 patterns; a matching text copy is not recorded */
+  ignore: string[];
 }
 
 export interface RetentionPolicy {
@@ -193,6 +207,9 @@ export const Desktop = {
   phrases(q: string): Promise<Phrase[]> {
     return call("Desktop.Phrases", q);
   },
+  privacy(): Promise<PrivacySettings> {
+    return call("Desktop.Privacy");
+  },
   promptPastePermission(session: number): Promise<string> {
     return call("Desktop.PromptPastePermission", session);
   },
@@ -216,6 +233,9 @@ export const Desktop = {
   savePhrase(id: string, text: string): Promise<Phrase> {
     return call("Desktop.SavePhrase", id, text);
   },
+  savePrivacy(s: PrivacySettings): Promise<PrivacySettings> {
+    return call("Desktop.SavePrivacy", s);
+  },
   saveRetention(policy: RetentionPolicy): Promise<PanelState> {
     return call("Desktop.SaveRetention", policy);
   },
@@ -228,8 +248,19 @@ export const Desktop = {
   setImageText(enabled: boolean): Promise<PanelState> {
     return call("Desktop.SetImageText", enabled);
   },
+  /**
+   * StartSequence queues the selected entry and every entry above it in the
+   * list the panel shows, then hides the panel. Each ⌘V after that pastes the
+   * next one, starting with the selected entry, the oldest of them.
+   */
+  startSequence(session: number, q: string, kind: string, index: number, id: string): Promise<void> {
+    return call("Desktop.StartSequence", session, q, kind, index, id);
+  },
   state(): Promise<PanelState> {
     return call("Desktop.State");
+  },
+  stopSequence(): Promise<PanelState> {
+    return call("Desktop.StopSequence");
   },
   storageStatus(): Promise<StorageStatus> {
     return call("Desktop.StorageStatus");

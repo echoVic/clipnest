@@ -6,7 +6,6 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/plugins/permissionflow"
 	"github.com/egoist/mygo/plugins/updater"
-	"github.com/egoist/mygo/transfer"
 	"log"
 	"net/url"
 	"runtime"
@@ -30,6 +29,8 @@ type PanelState struct {
 	Shortcut        string          `json:"shortcut"`
 	Storage         StorageStatus   `json:"storage"`
 	Version         string          `json:"version"`
+	// Sequence counts the entries a running paste sequence has left; 0 when none runs.
+	Sequence int `json:"sequence"`
 }
 type PasteResult struct {
 	Copied  bool   `json:"copied"`
@@ -57,6 +58,8 @@ type Desktop struct {
 	observedSource        targetApp
 	sourceObserved        bool
 	lastID                string
+	recent                recentCopy
+	sequence              *pasteSequence
 	clipboardAccess       ClipboardAccess
 	preferences           *preferencesWindow
 	appPicker             *applicationPicker
@@ -82,7 +85,7 @@ func (d *Desktop) snapshot() PanelState {
 		Session: d.session, Entries: summaries, Total: d.total, Loading: d.loading, Paused: paused, Accessible: d.n.Accessible(),
 		ClipboardAccess: d.clipboardAccess,
 		Target:          d.target.Name, Platform: runtime.GOOS, Notice: d.notice, Shortcut: d.shortcut,
-		Storage: d.StorageStatus(), Version: applicationVersion(),
+		Storage: d.StorageStatus(), Version: applicationVersion(), Sequence: d.sequenceRemaining(),
 	}
 }
 func (d *Desktop) State() (s PanelState) { mygo.RunOnMain(func() { s = d.snapshot() }); return }
@@ -281,12 +284,7 @@ func (d *Desktop) deliver(e Entry, copyOnly bool, session uint64) (result PasteR
 			err = errors.New("允许辅助功能后即可自动粘贴，也可以使用「仅复制」")
 			return
 		}
-		if e.Kind == "image" {
-			err = mygo.Clipboard.WriteImage(e.Image)
-		} else {
-			err = mygo.Clipboard.Write(transfer.TextData(e.Text))
-		}
-		if err != nil {
+		if err = writeClipboard(e); err != nil {
 			return
 		}
 		d.lastRevision = d.n.Revision()
@@ -317,6 +315,10 @@ func (d *Desktop) deliver(e Entry, copyOnly bool, session uint64) (result PasteR
 			}
 			ready = d.n.ReadyToPaste(target)
 			if ready {
+				// A running sequence holds ⌘V; let this one through.
+				if d.sequence != nil {
+					d.sequence.release()
+				}
 				err = d.n.Paste(target)
 				result.Pasted = err == nil
 			}

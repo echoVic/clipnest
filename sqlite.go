@@ -64,14 +64,15 @@ func openSQLite(path string, create bool) (*sqliteStore, error) {
 		err = s.transaction(func(tx *sql.Tx) error {
 			_, err := tx.Exec(`
 				PRAGMA application_id = 1129074766;
-				PRAGMA user_version = 4;
+				PRAGMA user_version = 5;
 				CREATE TABLE history (
 					id TEXT PRIMARY KEY, position INTEGER NOT NULL,
 					search_id INTEGER NOT NULL,
 					source TEXT NOT NULL, created INTEGER NOT NULL,
 					kind TEXT NOT NULL, title TEXT NOT NULL, excerpt TEXT NOT NULL,
 					width INTEGER NOT NULL, height INTEGER NOT NULL, byte_size INTEGER NOT NULL,
-					source_search TEXT NOT NULL, ` + imageTextStateColumn + `
+					source_search TEXT NOT NULL, ` + imageTextStateColumn + `,
+					` + secretColumn + `
 				);
 				CREATE INDEX history_order ON history(position);
 				CREATE INDEX history_kind_order ON history(kind, position);
@@ -100,7 +101,7 @@ func openSQLite(path string, create bool) (*sqliteStore, error) {
 		if err == nil {
 			err = db.QueryRow("PRAGMA user_version").Scan(&version)
 		}
-		if err == nil && (appID != databaseAppID || (version < 1 || version > 4)) {
+		if err == nil && (appID != databaseAppID || (version < 1 || version > 5)) {
 			err = errors.New("不支持此数据库格式或版本")
 		}
 		if err == nil && version == 1 {
@@ -111,6 +112,9 @@ func openSQLite(path string, create bool) (*sqliteStore, error) {
 		}
 		if err == nil && version < 4 {
 			err = s.upgradeImageText()
+		}
+		if err == nil && version < 5 {
+			err = s.upgradeSecret()
 		}
 	}
 	if err == nil {
@@ -167,14 +171,14 @@ func (s *sqliteStore) load() (archive, []Phrase, error) {
 	if err := s.db.QueryRow("SELECT paused FROM settings WHERE id = 1").Scan(&a.Paused); err != nil {
 		return a, nil, err
 	}
-	rows, err := s.db.Query(`SELECT h.id, c.text, c.image, h.source, h.created
+	rows, err := s.db.Query(`SELECT h.id, c.text, c.image, h.source, h.created, h.secret
 		FROM history h LEFT JOIN history_content c ON h.id = c.id ORDER BY h.position`)
 	if err != nil {
 		return a, nil, err
 	}
 	for rows.Next() {
 		var e Entry
-		if err = rows.Scan(&e.ID, &e.Text, &e.Image, &e.Source, &e.Created); err != nil {
+		if err = rows.Scan(&e.ID, &e.Text, &e.Image, &e.Source, &e.Created, &e.Secret); err != nil {
 			break
 		}
 		var valid Entry
@@ -187,6 +191,7 @@ func (s *sqliteStore) load() (archive, []Phrase, error) {
 			break
 		}
 		valid.Created = e.Created
+		valid.remask(e.Secret)
 		a.Entries = append(a.Entries, valid)
 	}
 	if err == nil {

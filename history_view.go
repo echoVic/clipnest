@@ -158,7 +158,7 @@ func (v *historyView) page(ctx context.Context, q, kind string, offset, limit in
 		v.lastQuery, v.lastKind, v.counted = q, kind, true
 	}
 	page.Total = v.lastTotal
-	rows, err := v.tx.QueryContext(ctx, `SELECT h.id,h.kind,h.title,h.excerpt,h.source,h.created,h.width,h.height`+
+	rows, err := v.tx.QueryContext(ctx, `SELECT h.id,h.kind,h.title,h.excerpt,h.source,h.created,h.width,h.height,h.secret`+
 		from+where+" ORDER BY h.position LIMIT ? OFFSET ?", append(args, limit, offset)...)
 	if err != nil {
 		return page, err
@@ -166,7 +166,7 @@ func (v *historyView) page(ctx context.Context, q, kind string, offset, limit in
 	defer rows.Close()
 	for rows.Next() {
 		var e Entry
-		if err := rows.Scan(&e.ID, &e.Kind, &e.Title, &e.Excerpt, &e.Source, &e.Created, &e.Width, &e.Height); err != nil {
+		if err := rows.Scan(&e.ID, &e.Kind, &e.Title, &e.Excerpt, &e.Source, &e.Created, &e.Width, &e.Height, &e.Secret); err != nil {
 			return page, err
 		}
 		page.Entries = append(page.Entries, e)
@@ -218,14 +218,14 @@ func (v *historyView) Detail(id string) (Entry, error) {
 		}
 		return Entry{}, errors.New("这条内容已移除")
 	}
-	var text, source, imageText string
+	var text, source, imageText, secret string
 	var image []byte
 	var created int64
 	var state int
 	var enabled bool
-	err := v.tx.QueryRowContext(v.ctx, `SELECT c.text,c.image,h.source,h.created,h.ocr_state,coalesce(o.text,''),
+	err := v.tx.QueryRowContext(v.ctx, `SELECT c.text,c.image,h.source,h.created,h.ocr_state,coalesce(o.text,''),h.secret,
 		(SELECT ocr_enabled FROM settings WHERE id=1) FROM history h`+searchDocumentJoin+` WHERE h.id=?`, id).Scan(
-		&text, &image, &source, &created, &state, &imageText, &enabled)
+		&text, &image, &source, &created, &state, &imageText, &secret, &enabled)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Entry{}, errors.New("这条内容已移除")
 	}
@@ -240,6 +240,7 @@ func (v *historyView) Detail(id string) (Entry, error) {
 		return Entry{}, errors.New("历史内容与标识不一致")
 	}
 	e.Created = created
+	e.remask(secret)
 	imageTextDetail(&e, state, imageText, enabled)
 	return e, nil
 }

@@ -53,6 +53,13 @@ func (n *nativeBridge) Revision() int64 {
 	return int64(v)
 }
 
+// Empty counts formats without opening the clipboard, so a clipboard another
+// app holds open is not mistaken for a cleared one.
+func (n *nativeBridge) Empty() bool {
+	count, _, err := n.user32.NewProc("CountClipboardFormats").Call()
+	return count == 0 && err == syscall.Errno(0)
+}
+
 // Target names the foreground app's process, the source of the next paste.
 // Our own panel and tray windows never become the target.
 func (n *nativeBridge) Target() targetApp {
@@ -168,8 +175,6 @@ func (n *nativeBridge) ReadyToPaste(t targetApp) bool {
 const (
 	inputKeyboard  = 1
 	keyeventfKeyUp = 0x0002
-	vkControl      = 0x11
-	vkV            = 0x56
 )
 
 type keyInput struct {
@@ -191,17 +196,29 @@ func (n *nativeBridge) Paste(t targetApp) error {
 	if !n.ReadyToPaste(t) {
 		return errors.New("原应用尚未获得焦点，内容已复制，可手动粘贴")
 	}
-	down := func(vk uint16) keyInput { return keyInput{vk: vk} }
-	up := func(vk uint16) keyInput { return keyInput{vk: vk, flags: keyeventfKeyUp} }
-	records := [4]inputRecord{
-		{inputType: inputKeyboard, ki: down(vkControl)},
-		{inputType: inputKeyboard, ki: down(vkV)},
-		{inputType: inputKeyboard, ki: up(vkV)},
-		{inputType: inputKeyboard, ki: up(vkControl)},
+	return n.sendKeys(windowsPasteKeys(false))
+}
+
+func pasteAccelerator() string { return "Ctrl+V" }
+
+// PasteHeld pastes into the foreground window while the user may still hold
+// the Ctrl+V a paste sequence caught.
+func (n *nativeBridge) PasteHeld() error {
+	state, _, _ := n.user32.NewProc("GetAsyncKeyState").Call(vkControl)
+	return n.sendKeys(windowsPasteKeys(state&0x8000 != 0))
+}
+
+func (n *nativeBridge) sendKeys(keys []keyStroke) error {
+	records := make([]inputRecord, len(keys))
+	for i, key := range keys {
+		records[i] = inputRecord{inputType: inputKeyboard, ki: keyInput{vk: key.vk}}
+		if key.up {
+			records[i].ki.flags = keyeventfKeyUp
+		}
 	}
 	sent, _, _ := n.user32.NewProc("SendInput").Call(
-		4, uintptr(unsafe.Pointer(&records[0])), unsafe.Sizeof(records[0]))
-	if sent != 4 {
+		uintptr(len(records)), uintptr(unsafe.Pointer(&records[0])), unsafe.Sizeof(records[0]))
+	if int(sent) != len(records) {
 		return errors.New("无法发送粘贴按键，内容已复制，可手动粘贴")
 	}
 	return nil

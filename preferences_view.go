@@ -3,6 +3,8 @@ package main
 import (
 	"errors"
 	"math"
+	"slices"
+	"strings"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -17,6 +19,7 @@ type preferencesActions struct {
 	accessibility     func() error
 	addExcludedApp    func()
 	removeExcludedApp func(string)
+	savePrivacy       func(PrivacySettings)
 	imageText         func(bool)
 	migrate           func()
 	saveRetention     func(RetentionPolicy)
@@ -37,12 +40,16 @@ type preferencesView struct {
 	keepDays          float64
 	retentionDirty    bool
 	confirmClear      bool
+	ignoreDraft       string
 }
 
 func (v *preferencesView) setState(s PreferencesState) {
 	v.state = s
 	if !v.retentionDirty {
 		v.maxMiB, v.keepDays = float64(s.Storage.Retention.MaxMiB), float64(s.Storage.Retention.KeepDays)
+	}
+	if rule := strings.TrimSpace(v.ignoreDraft); rule != "" && slices.Contains(s.Privacy.Ignore, rule) {
+		v.ignoreDraft = ""
 	}
 }
 
@@ -311,6 +318,7 @@ func (v *preferencesView) privacy(c *ui.Context) {
 		})
 	})
 	v.exclusions(c)
+	v.sensitive(c)
 	v.imageText(c)
 	v.group(c, "自动粘贴", func() {
 		v.row(c, "辅助功能", "允许后，选完即可粘贴到原应用；未授权时仍可「仅复制」。", func() {
@@ -328,7 +336,7 @@ func (v *preferencesView) privacy(c *ui.Context) {
 			}
 		})
 	})
-	ui.Text(c, "文字与图片仅保存在这台电脑。标记为机密的内容不会记录。").FontSize(12).TextColor(c.Theme().TextMuted)
+	ui.Text(c, "文字与图片仅保存在这台电脑。标记为机密的内容不会记录，识别到的密钥会遮罩。").FontSize(12).TextColor(c.Theme().TextMuted)
 }
 
 func clipboardDescription(access ClipboardAccess) string {

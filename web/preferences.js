@@ -29,6 +29,75 @@ export function preferencesTabs(root) {
   select(tabs.find(tab => tab.getAttribute('aria-selected') === 'true') || tabs[0]);
 }
 
+// Sensitive content saves the whole settings value on each change. A rule
+// stays in the input until the save succeeds; a failed save rereads the
+// settings, since a write can fail after it was published.
+export function preferencesPrivacy(root, { call }) {
+  const $ = selector => root.querySelector(selector);
+  const document = root.ownerDocument || root;
+  const group = $('#sensitive-group'), mode = $('#secrets-mode'), clearSync = $('#clear-sync');
+  const input = $('#ignore-rule'), add = $('#ignore-add'), list = $('#ignore-list');
+  const empty = $('#ignore-empty'), errorField = $('#privacy-error');
+  let settings = null, pending = false, error = '';
+  const node = (tag, text) => {
+    const element = document.createElement(tag);
+    if (text !== undefined) element.textContent = text;
+    return element;
+  };
+  const message = err => err?.message || String(err);
+  function controls() {
+    group.setAttribute('aria-busy', pending);
+    for (const control of [mode, clearSync, input, add, ...list.querySelectorAll('button')]) control.disabled = pending || !settings;
+    errorField.textContent = error; errorField.hidden = !error;
+  }
+  function render() {
+    list.replaceChildren();
+    if (settings) {
+      mode.value = settings.secrets; clearSync.checked = settings.clearSync;
+      for (const rule of settings.ignore) {
+        const row = node('li'); row.className = 'setting-row ignore-rule-row';
+        const remove = node('button', '移除'); remove.type = 'button'; remove.className = 'secondary';
+        remove.setAttribute('aria-label', `移除 ${rule}`);
+        remove.onclick = () => save({ ...settings, ignore: settings.ignore.filter(r => r !== rule) });
+        row.append(node('code', rule), remove); list.append(row);
+      }
+    }
+    empty.hidden = !settings || settings.ignore.length > 0;
+    controls();
+  }
+  async function run(method, ...args) {
+    if (pending) return false;
+    pending = true; error = ''; controls();
+    let saved = false;
+    try {
+      settings = await call(method, ...args); saved = true;
+    } catch (err) {
+      error = message(err); settings = null;
+      if (method !== 'Privacy') {
+        try { settings = await call('Privacy'); }
+        catch (readError) { error += `；无法确认设置：${message(readError)}`; }
+      }
+    } finally { pending = false; render(); }
+    return saved;
+  }
+  const save = next => settings && run('SavePrivacy', next);
+  mode.addEventListener('change', () => save({ ...settings, secrets: mode.value }));
+  clearSync.addEventListener('change', () => save({ ...settings, clearSync: clearSync.checked }));
+  async function addRule() {
+    const rule = input.value.trim();
+    if (!rule || pending || !settings) return;
+    if (await save({ ...settings, ignore: [...settings.ignore, rule] })) input.value = '';
+  }
+  add.onclick = addRule;
+  input.addEventListener('keydown', event => {
+    if (event.key !== 'Enter' || event.isComposing) return;
+    event.preventDefault();
+    return addRule();
+  });
+  render();
+  return { refresh: () => run('Privacy') };
+}
+
 // Exclusions have their own request state; they never refresh history or drafts.
 export function preferencesExclusions(root, { call, demo }) {
   const $ = selector => root.querySelector(selector);

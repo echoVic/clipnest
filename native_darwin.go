@@ -156,6 +156,10 @@ func (n *nativeBridge) Revision() int64 {
 	defer n.pool()()
 	return int64(n.send(n.send(n.getClass("NSPasteboard"), "generalPasteboard"), "changeCount"))
 }
+func (n *nativeBridge) Empty() bool {
+	defer n.pool()()
+	return n.send(n.send(n.send(n.getClass("NSPasteboard"), "generalPasteboard"), "types"), "count") == 0
+}
 func (n *nativeBridge) ClipboardAccess() ClipboardAccess {
 	defer n.pool()()
 	board := n.send(n.getClass("NSPasteboard"), "generalPasteboard")
@@ -200,6 +204,21 @@ func (n *nativeBridge) Paste(t targetApp) error {
 	if !n.ReadyToPaste(t) {
 		return errors.New("原应用尚未获得焦点，内容已复制，可手动粘贴")
 	}
+	return n.postPaste()
+}
+
+func pasteAccelerator() string { return "Command+V" }
+
+// PasteHeld pastes into the front app while the user still holds the ⌘V a
+// paste sequence caught. The event carries its own ⌘ flag.
+func (n *nativeBridge) PasteHeld() error {
+	if !n.Accessible() {
+		return errors.New("请先在系统设置中允许 Clipnest 使用辅助功能")
+	}
+	return n.postPaste()
+}
+
+func (n *nativeBridge) postPaste() error {
 	down, up := n.createKey(0, 9, true), n.createKey(0, 9, false) // ANSI V.
 	if down == 0 || up == 0 {
 		if down != 0 {
