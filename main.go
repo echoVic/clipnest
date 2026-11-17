@@ -103,6 +103,9 @@ func main() {
 			return
 		}
 		d.quitting = true
+		if d.sequence != nil {
+			d.sequence.stop("")
+		}
 		d.cancelPermission()
 		d.cancelExclusions()
 		d.closeView()

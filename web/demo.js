@@ -82,7 +82,8 @@ export function createDemo({ version = '开发版', accessible = true, legacySto
   const summary = e => ({ ...titled(e), text: undefined, image: undefined, masked: undefined });
   let privacy = checkPrivacy({ secrets: 'mask', clearSync: true, ignore: [] });
   const status = () => ({ ...storage, retention: { ...storage.retention } });
-  const state = () => ({ session, loading, total: entries.length, entries: loading ? [] : entries.slice(0, 50).map(summary), paused, clipboardAccess, accessible, version, target: '备忘录', platform: 'demo', notice: '', shortcut: '⌘ ⇧ V', storage: status() });
+  let sequence = 0;
+  const state = () => ({ session, loading, total: entries.length, entries: loading ? [] : entries.slice(0, 50).map(summary), paused, clipboardAccess, accessible, version, target: '备忘录', platform: 'demo', notice: '', shortcut: '⌘ ⇧ V', storage: status(), sequence });
   const emit = () => { for (const fn of listeners) fn(state()); };
   const fresh = (publishLoading = false) => {
     session++; revision = 0; loading = true; clearTimeout(readyTimer);
@@ -157,6 +158,19 @@ export function createDemo({ version = '开发版', accessible = true, legacySto
         storage = { ...storage, imageText: !!args[0] };
         return fresh();
       case 'Choose': checkSession(args[0]); historyEntry(args[1]); return { copied: false, pasted: false, message: args[2] ? '演示：内容已选中，未更改系统剪贴板' : '演示：已选择粘贴，未发送系统按键' };
+      // The demo only counts the queue; it never takes over ⌘V.
+      case 'StartSequence': {
+        const [id, q, kind, index, entryID] = args;
+        checkSession(id);
+        if (!Number.isSafeInteger(index) || index < 1) throw Error('至少需要 2 条才能顺序粘贴');
+        if (index >= 100) throw Error('顺序粘贴最多 100 条，请从更近的一条开始');
+        const matches = entries.filter(e => (kind === 'all' || e.kind === kind) && searchable(e).toLowerCase().includes(q.toLowerCase().trim()));
+        if (matches[index]?.id !== entryID) throw Error('列表已更新，请重新选择');
+        sequence = index + 1;
+        emit();
+        return null;
+      }
+      case 'StopSequence': sequence = 0; return state();
       case 'Pause': paused = args[0]; return state();
       case 'Delete': checkSession(args[0]); historyEntry(args[1]); entries = entries.filter(e => e.id !== args[1]); return fresh();
       case 'Clear': entries = []; return fresh();

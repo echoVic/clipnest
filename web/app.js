@@ -1,6 +1,6 @@
 import { moveIndex, indexAfterRemoval, WheelSelection } from './selection.js';
 import { keyAction } from './keys.js';
-import { entryActions } from './actions.js';
+import { entryActions, sequenceBanner } from './actions.js';
 import { ctrlKeys, renderShortcutGroups } from './shortcuts.js';
 import { createDemo } from './demo.js';
 import { DetailCache, DeferredPreview, PagedList, PAGE_SIZE, ScrollRenderQueue, virtualRange, scrollForIndex, acceptPanel, panelReadError, updateSelection, characterCount } from './responsiveness.js';
@@ -79,6 +79,8 @@ function header() {
   $('#shortcut-label').textContent = state.shortcut;
   $('#app-version').textContent = `Clipnest ${state.version || '开发版'}`;
   $('#notice').hidden = !state.notice; $('#notice').textContent = state.notice;
+  const banner = sequenceBanner(state.sequence, ctrlPlatform());
+  $('#sequence-banner').hidden = !banner; $('#sequence-text').textContent = banner;
   $('#count').textContent = state.total;
   const pastePlatform = state.platform === 'darwin' || state.platform === 'windows';
   $('#permission-status').textContent = demo ? '演示模式，桌面版可粘贴到原应用。' : !pastePlatform ? '此系统使用「仅复制」，自动粘贴支持 macOS 与 Windows。' : state.accessible ? '已允许，选完即可粘贴到原应用。' : '允许辅助功能，选完直接粘贴。';
@@ -593,6 +595,22 @@ async function openLink() {
     if (/^https?:\/\//i.test(url)) window.open(url, '_blank', 'noopener,noreferrer'); else toast('只有链接可以打开');
   } catch (err) { toast(message(err)); }
 }
+// The selected entry and every one above it wait for ⌘V once the panel hides.
+async function startSequence() {
+  if (blocked() || choosing) return;
+  choosing = true; actionButtons();
+  try {
+    const ticket = await pages.pick();
+    if (!pages.isCurrent(ticket) || blocked() || ticket.view !== 'history') return;
+    await call('StartSequence', ticket.session, ticket.q, ticket.kind, ticket.index, ticket.id);
+    if (demo) toast(`演示：已开始顺序粘贴 ${ticket.index + 1} 条，桌面版每次 ⌘V 粘贴下一条`);
+  } catch (err) { toast(message(err)); }
+  finally { choosing = false; actionButtons(); }
+}
+async function stopSequence() {
+  try { applyState(await call('StopSequence')); toast('已停止顺序粘贴'); } catch (err) { toast(message(err)); }
+}
+$('#sequence-stop').onclick = stopSequence;
 // Menu items and shortcuts share one dispatcher, so both behave the same.
 function perform(action) {
   switch (action.type) {
@@ -600,6 +618,7 @@ function perform(action) {
     case 'copy': choose(true); break;
     case 'edit': editPhrase(); break;
     case 'reorder': reorder(action.delta); break;
+    case 'sequence': startSequence(); break;
     case 'save-phrase': saveAsPhrase(); break;
     case 'open-link': openLink(); break;
     case 'image-text': { const e = currentEntry(); if (e && imageTextReady === e.id) copyImageText(state.session, e.id); break; }
@@ -617,7 +636,7 @@ function toggleMenu() {
   if (menu.open) { menu.close(); return; }
   const entry = currentEntry(); if (!entry || blocked() || choosing) return;
   const items = $('#action-menu-items'); items.replaceChildren();
-  for (const action of entryActions({ view, kind: entry.kind, secret: !!entry.secret, imageText: imageTextReady === entry.id, index: pages.selected, total: pages.total, hasQuery: !!$('#search').value, ctrl: ctrlPlatform() })) {
+  for (const action of entryActions({ view, kind: entry.kind, secret: !!entry.secret, imageText: imageTextReady === entry.id, index: pages.selected, total: pages.total, hasQuery: !!$('#search').value, ctrl: ctrlPlatform(), sequence: demo || state.platform === 'darwin' || state.platform === 'windows' })) {
     if (action.danger) { const line = node('div', 'menu-separator'); line.setAttribute('role', 'separator'); items.append(line); }
     const item = node('button', `menu-item${action.danger ? ' menu-danger' : ''}`); item.type = 'button'; item.setAttribute('role', 'menuitem');
     item.append(node('span', '', action.label)); if (action.shortcut) item.append(node('kbd', '', action.shortcut));

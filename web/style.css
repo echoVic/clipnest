@@ -28,10 +28,11 @@ dialog{padding:25px;border-radius:17px;border:1px solid var(--line);background:v
 .link-button{background:none;border:0;padding:0;font:inherit;color:var(--accent-strong);cursor:pointer}
 .link-button:hover{text-decoration:underline}
 .storage-upgrade{display:flex;align-items:center;gap:14px;flex-shrink:0;margin:0 25px 12px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--soft)}
+.sequence-banner{display:flex;align-items:center;gap:12px;flex-shrink:0;margin:0 25px 12px;padding:8px 8px 8px 12px;border:1px solid #7765bb40;border-radius:10px;background:#f0eaf9;color:var(--accent-strong);font-size:11px}.sequence-banner span{flex:1;min-width:0}.sequence-banner .secondary{min-height:27px;padding:0 10px;color:var(--accent-strong)}:root[data-theme=dark] .sequence-banner{background:#352d43;border-color:#b0a0ef33}
 .migration-copy{flex:1;min-width:0}.migration-copy strong{font-size:11px;font-weight:600}.migration-copy p{margin:3px 0 0;font-size:11px;line-height:1.5;color:var(--muted)}.migration-copy .field-error,.setting-row .field-error{color:var(--danger)}
 .migration-actions{display:flex;align-items:center;gap:12px;flex-shrink:0;font-size:11px}.migration-actions .secondary{min-height:29px;color:var(--accent-strong)}
 #migrate-settings{flex-shrink:0}
-@media(max-width:560px){.storage-upgrade{margin-inline:18px;align-items:flex-start;gap:8px}.migration-actions{gap:8px}.migration-actions .secondary{padding:0 8px}}
+@media(max-width:560px){.sequence-banner{margin-inline:18px}.storage-upgrade{margin-inline:18px;align-items:flex-start;gap:8px}.migration-actions{gap:8px}.migration-actions .secondary{padding:0 8px}}
 /* Phrases page: header view switch, page-only elements, two-line excerpts. */
 .views{display:flex;gap:2px;padding:3px;border:1px solid var(--line);border-radius:9px;background:var(--soft);--app-region:no-drag}.views button{height:25px;padding:0 13px;border-radius:7px;color:var(--muted);font-size:11px;white-space:nowrap}.views button:hover{color:var(--ink)}.views button.active{background:var(--surface);color:var(--accent-strong);font-weight:600;box-shadow:0 1px 2px #20203012}.view-phrases .history-only,.panel:not(.view-phrases) .phrases-only{display:none!important}.entry-excerpt{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere;font-size:12px;line-height:1.55;font-weight:500}@media(max-width:560px){.tagline{display:none}}
 /* Phrases editing: new button, preview actions, editor dialog. */

@@ -34,3 +34,9 @@ func (*nativeBridge) closeApplicationPicker(*applicationPicker) {}
 func (*nativeBridge) Paste(targetApp) error {
 	return errors.New("当前系统支持复制历史内容，请返回原应用手动粘贴")
 }
+
+// Without auto-paste there is no paste sequence.
+func pasteAccelerator() string { return "" }
+func (*nativeBridge) PasteHeld() error {
+	return errors.New("当前系统不支持顺序粘贴")
+}
