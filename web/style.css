@@ -155,3 +155,15 @@ button:not(:disabled):active{filter:brightness(.96)}
 dialog.action-menu{position:fixed;inset:auto;margin:0;padding:5px;width:auto;min-width:196px;max-width:calc(100vw - 16px);border-radius:11px}dialog.action-menu::backdrop{background:transparent;backdrop-filter:none}.action-menu [role=menu]{display:flex;flex-direction:column;gap:1px}.menu-item{display:flex;align-items:center;justify-content:space-between;gap:18px;height:30px;padding:0 9px;border-radius:7px;color:var(--ink);font-size:12px;text-align:left;outline:none}.menu-item:focus{background:var(--selected);color:var(--accent-strong)}.menu-item kbd{border:0;background:transparent;height:18px;padding:0;color:var(--muted)}.menu-item.menu-danger{color:var(--danger)}.menu-item.menu-danger:focus{background:#a5525b14;color:var(--danger)}.menu-separator{height:1px;margin:4px 6px;background:var(--line)}:root[data-theme=dark] .menu-item.menu-danger:focus{background:#d28b901e}
 :root.reduce-transparency dialog.action-menu::backdrop{background:transparent}
 .action-menu .menu-item:focus-visible{outline:none}:root.high-contrast .action-menu .menu-item:focus{outline:2px solid var(--accent);outline-offset:-2px}
+/* Sensitive content: masked rows get a lock, the preview hides the original
+   until 显示 is pressed, and ignore rules list as code with a remove action. */
+.entry-icon.secret{color:#a0745a}
+.preview-meta .reveal-secret{min-height:23px;padding:0 9px;font-size:11px}
+#preferences .ignore-rule-field{padding-bottom:8px}
+.ignore-rule-input{display:flex;gap:8px;padding-bottom:12px}
+.ignore-rule-input input{flex:1;min-width:0;padding:6px 9px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--ink);font:12px/1.5 "SFMono-Regular",Consolas,"Liberation Mono",monospace;outline:none}
+.ignore-rule-input input:focus{border-color:#a696e7;box-shadow:0 0 0 3px #684fd124}
+.ignore-list{list-style:none;padding:0;margin:0}
+#preferences .ignore-rule-row{padding:9px 0;border-top:1px solid var(--line)}
+.ignore-rule-row code{flex:1;min-width:0;overflow-wrap:anywhere;font:12px/1.6 "SFMono-Regular",Consolas,"Liberation Mono",monospace;color:var(--ink)}
+:root[data-theme=dark] .entry-icon.secret{color:#d0a283}

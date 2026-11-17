@@ -9,6 +9,10 @@ test('history actions follow the entry kind', () => {
  assert.deepEqual(types({ kind: 'image' }), ['choose', 'copy', 'delete']);
  assert.deepEqual(types({ kind: 'image', imageText: true }), ['choose', 'copy', 'image-text', 'delete']);
 });
+test('a masked secret cannot become a phrase', () => {
+ assert.deepEqual(types({ secret: true }), ['choose', 'copy', 'delete']);
+ assert.deepEqual(types({ kind: 'link', secret: true }), ['choose', 'copy', 'open-link', 'delete']);
+});
 test('phrase actions hide moves that cannot happen', () => {
  const phrases = { view: 'phrases' };
  assert.deepEqual(entryActions({ ...phrases, index: 1, total: 3 }).filter(a => a.type === 'reorder').map(a => a.delta), [-1, 1]);

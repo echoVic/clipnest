@@ -263,3 +263,39 @@ test('legacy demo storage explains that screenshot text needs SQLite', async () 
  assert.equal((await demo.call('Detail', state.session, image.id)).imageTextState, 'needsSQLite');
  await assert.rejects(demo.call('SetImageText', true), /迁移/);
 });
+
+test('the demo masks its sample key everywhere but the pasted text', async () => {
+ const demo = createDemo(), ready = readyState(demo);
+ await demo.call('State');
+ const state = await ready;
+ const secret = state.entries.find(e => e.secret);
+ assert.equal(secret.secret, 'AWS 访问密钥');
+ assert.equal(secret.title, 'export AWS_ACCESS_KEY_ID=AKIA••••MPLE');
+ assert.equal(secret.text, undefined); assert.equal(secret.masked, undefined);
+ assert.ok(!secret.excerpt.includes('IOSFODNN7'));
+ const detail = await demo.call('Detail', state.session, secret.id);
+ assert.ok(detail.text.includes('AKIAIOSFODNN7EXAMPLE'));
+ assert.equal(detail.masked, 'export AWS_ACCESS_KEY_ID=AKIA••••MPLE\nexport AWS_REGION=us-east-1');
+ const search = async q => (await demo.call('Page', state.session, 1, q, 'all', 0, 50)).total;
+ assert.equal(await search('IOSFODNN7'.toLowerCase()), 0);
+ assert.equal(await search('aws_region'), 1);
+ assert.equal(await search('akia••••mple'), 1);
+});
+
+test('demo privacy settings follow the desktop rules', async () => {
+ const { call } = createDemo();
+ assert.deepEqual(await call('Privacy'), { secrets: 'mask', clearSync: true, ignore: [] });
+ const saved = await call('SavePrivacy', { secrets: 'skip', clearSync: false, ignore: ['^\\d{6}$', '(?i)internal'] });
+ assert.deepEqual(saved, { secrets: 'skip', clearSync: false, ignore: ['^\\d{6}$', '(?i)internal'] });
+ saved.ignore.push('mutated');
+ assert.deepEqual((await call('Privacy')).ignore, ['^\\d{6}$', '(?i)internal']);
+ const reject = (settings, pattern) => assert.rejects(call('SavePrivacy', { secrets: 'mask', clearSync: true, ignore: [], ...settings }), pattern);
+ await reject({ secrets: 'show' }, /密钥识别设置无效/);
+ await reject({ ignore: ['  '] }, /不能为空/);
+ await reject({ ignore: ['a'.repeat(513)] }, /512 字节/);
+ await reject({ ignore: ['a', 'a'] }, /重复/);
+ await reject({ ignore: ['(unclosed'] }, /不是有效的正则表达式/);
+ await reject({ ignore: ['a*'] }, /会匹配所有内容/);
+ await reject({ ignore: Array.from({ length: 65 }, (_, i) => `rule${i}`) }, /最多 64 条/);
+ assert.deepEqual((await call('Privacy')).ignore, ['^\\d{6}$', '(?i)internal'], 'a rejected save changes nothing');
+});
