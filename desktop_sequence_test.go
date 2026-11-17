@@ -31,16 +31,17 @@ func TestSequenceOwnWindow(t *testing.T) {
 	other := targetApp{PID: 42, Name: "TextEdit"}
 	for _, c := range []struct {
 		name         string
-		panelVisible bool
+		panelFocused bool
 		front        targetApp
 		want         bool
 	}{
 		// The macOS panel takes keys without making Clipnest the front app.
-		{"panel over another app", true, other, true},
+		{"panel with the keys over another app", true, other, true},
 		{"own app in front", false, targetApp{}, true},
+		// A pinned panel stays up while another app has the keys.
 		{"another app in front", false, other, false},
 	} {
-		if got := sequenceOwnWindow(c.panelVisible, c.front); got != c.want {
+		if got := sequenceOwnWindow(c.panelFocused, c.front); got != c.want {
 			t.Errorf("%s: %v, want %v", c.name, got, c.want)
 		}
 	}

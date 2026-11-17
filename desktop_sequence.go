@@ -23,11 +23,11 @@ func sequenceUnavailable(goos string, sequence *pasteSequence, accessible bool) 
 }
 
 // sequenceOwnWindow reports whether a press of the paste keys belongs to one
-// of Clipnest's own windows. The panel hides when it loses focus, so while it
-// shows it has the keys, even on macOS where it takes them without making
-// Clipnest the front app.
-func sequenceOwnWindow(panelVisible bool, front targetApp) bool {
-	return panelVisible || front.PID == 0
+// of Clipnest's own windows: the panel has the keyboard, which on macOS it
+// takes without making Clipnest the front app, or Clipnest is in front. A
+// pinned panel shows without the keyboard, so showing is not enough.
+func sequenceOwnWindow(panelFocused bool, front targetApp) bool {
+	return panelFocused || front.PID == 0
 }
 
 func writeClipboard(e Entry) error {
