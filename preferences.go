@@ -21,6 +21,7 @@ type PreferencesState struct {
 	Platform        string           `json:"platform"`
 	Version         string           `json:"version"`
 	ExcludedApps    []ExcludedApp    `json:"excludedApps"`
+	Privacy         PrivacySettings  `json:"privacy"`
 }
 
 type preferencesWindow struct {
@@ -117,6 +118,7 @@ func (d *Desktop) preferencesState() PreferencesState {
 		ClipboardAccess: d.clipboardAccess, Shortcut: d.shortcut, Storage: d.StorageStatus(),
 		ShortcutNotice: d.shortcutNotice,
 		Platform:       runtime.GOOS, Version: applicationVersion(), ExcludedApps: d.ExcludedApps(),
+		Privacy: d.Privacy(),
 	}
 }
 
@@ -164,6 +166,9 @@ func newPreferencesWindow(d *Desktop) *preferencesWindow {
 		},
 		removeExcludedApp: func(id string) {
 			p.run(func() error { _, err := d.RemoveExcludedApp(id); return err }, "已移除，下一次复制重新判断", false)
+		},
+		savePrivacy: func(s PrivacySettings) {
+			p.run(func() error { _, err := d.SavePrivacy(s); return err }, "已保存，之后的复制按新设置处理", false)
 		},
 		imageText: func(on bool) {
 			success := "已关闭，识别的文字已删除"
