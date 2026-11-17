@@ -53,6 +53,13 @@ func (n *nativeBridge) Revision() int64 {
 	return int64(v)
 }
 
+// Empty counts formats without opening the clipboard, so a clipboard another
+// app holds open is not mistaken for a cleared one.
+func (n *nativeBridge) Empty() bool {
+	count, _, err := n.user32.NewProc("CountClipboardFormats").Call()
+	return count == 0 && err == syscall.Errno(0)
+}
+
 // Target names the foreground app's process, the source of the next paste.
 // Our own panel and tray windows never become the target.
 func (n *nativeBridge) Target() targetApp {

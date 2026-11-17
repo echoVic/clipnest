@@ -156,6 +156,10 @@ func (n *nativeBridge) Revision() int64 {
 	defer n.pool()()
 	return int64(n.send(n.send(n.getClass("NSPasteboard"), "generalPasteboard"), "changeCount"))
 }
+func (n *nativeBridge) Empty() bool {
+	defer n.pool()()
+	return n.send(n.send(n.send(n.getClass("NSPasteboard"), "generalPasteboard"), "types"), "count") == 0
+}
 func (n *nativeBridge) ClipboardAccess() ClipboardAccess {
 	defer n.pool()()
 	board := n.send(n.getClass("NSPasteboard"), "generalPasteboard")

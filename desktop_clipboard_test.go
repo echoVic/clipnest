@@ -29,6 +29,7 @@ type testClipboard struct {
 func (c *testClipboard) Revision() int64                  { return c.revision }
 func (c *testClipboard) ClipboardAccess() ClipboardAccess { return c.access }
 func (c *testClipboard) AvailableFormats() []string       { return c.formats }
+func (c *testClipboard) Empty() bool                      { return len(c.formats) == 0 && len(c.portable) == 0 }
 func (c *testClipboard) Formats() []transfer.Format {
 	if c.onFormats != nil {
 		c.onFormats()

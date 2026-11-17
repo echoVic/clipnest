@@ -57,6 +57,7 @@ type Desktop struct {
 	observedSource        targetApp
 	sourceObserved        bool
 	lastID                string
+	recent                recentCopy
 	clipboardAccess       ClipboardAccess
 	preferences           *preferencesWindow
 	appPicker             *applicationPicker
