@@ -27,6 +27,10 @@ type PreferencesState struct {
 	OpenAtLogin bool `json:"openAtLogin"`
 	// ImageTextNote says which languages the system cannot recognize yet.
 	ImageTextNote string `json:"imageTextNote,omitempty"`
+	// WinV is whether Win+V opens Clipnest (Windows only), and WinVNotice
+	// why it does not although it should.
+	WinV       winVState `json:"winV"`
+	WinVNotice string    `json:"winVNotice,omitempty"`
 }
 
 type preferencesWindow struct {
@@ -99,6 +103,10 @@ func (d *Desktop) setShortcut(accelerator string) error {
 			if err != nil {
 				d.shortcutNotice = err.Error()
 			}
+			// Win+V was the summon shortcut; the switch keeps it.
+			if previous == winVAccelerator {
+				d.registerWinV()
+			}
 			if d.win != nil && d.win.IsVisible() {
 				_ = panelChanged.Broadcast(d.snapshot())
 			}
@@ -124,6 +132,7 @@ func (d *Desktop) preferencesState() PreferencesState {
 		ShortcutNotice: d.shortcutNotice,
 		Platform:       runtime.GOOS, Version: applicationVersion(), ExcludedApps: d.ExcludedApps(),
 		Privacy: d.Privacy(), OpenAtLogin: mygo.App.OpenAtLogin(), ImageTextNote: imageTextNote(),
+		WinV: d.winVState(), WinVNotice: d.winVNotice,
 	}
 }
 
@@ -197,6 +206,16 @@ func newPreferencesWindow(d *Desktop) *preferencesWindow {
 				success = "下次登录时，Clipnest 会在后台打开"
 			}
 			p.run(func() error { return d.setOpenAtLogin(on) }, success, false)
+		},
+		winV: func(on bool) {
+			success := "已关闭，Win+V 重新打开系统的剪贴板面板"
+			switch {
+			case on:
+				success = "已开启，按 Win+V 打开 Clipnest"
+			case v.state.WinV == winVKept:
+				success = "已关闭"
+			}
+			p.run(func() error { return d.setWinV(on) }, success, false)
 		},
 		update: d.CheckForUpdates,
 		close: func() {

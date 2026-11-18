@@ -72,6 +72,8 @@ type Desktop struct {
 	shortcutAccelerator   string
 	shortcutPath          string
 	shortcutNotice        string
+	winVNotice            string
+	winVRegistered        bool
 	busy                  bool
 	quitting              bool
 	// pinned keeps the panel up; hiding it unpins. handingOff marks the brief

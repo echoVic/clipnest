@@ -22,7 +22,14 @@ var frontend embed.FS
 func main() {
 	webAddress := flag.String("web", "", "启动仅含示例数据的浏览器交互演示")
 	dataDir := flag.String("data-dir", "", "历史与常用语的存储目录")
+	restoreWinV := flag.Bool("restore-win-v", false, "把 Win+V 交还给系统后退出，卸载时运行")
 	flag.Parse()
+	if *restoreWinV {
+		if err := turnOffWinV(systemWinV()); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	web, _ := fs.Sub(frontend, "web")
 	if *webAddress != "" {
 		host, _, err := net.SplitHostPort(*webAddress)

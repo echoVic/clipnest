@@ -25,6 +25,7 @@ type preferencesActions struct {
 	saveRetention     func(RetentionPolicy)
 	clear             func()
 	openAtLogin       func(bool)
+	winV              func(bool)
 	update            func()
 	close             func()
 }
@@ -42,6 +43,8 @@ type preferencesView struct {
 	maxEntries        float64
 	retentionDirty    bool
 	confirmClear      bool
+	confirmWinV       bool
+	winVTarget        bool
 	ignoreDraft       string
 }
 
@@ -83,7 +86,7 @@ func (v *preferencesView) draw(c *ui.Context) {
 	if v.tab != shortcutsTab {
 		v.recordingShortcut = false
 	}
-	if !v.recordingShortcut && !v.confirmClear && !v.busy && (c.Shortcut(0, ui.KeyEscape) || c.Shortcut(ui.Cmd, ui.KeyW)) && v.actions.close != nil {
+	if !v.recordingShortcut && !v.confirmClear && !v.confirmWinV && !v.busy && (c.Shortcut(0, ui.KeyEscape) || c.Shortcut(ui.Cmd, ui.KeyW)) && v.actions.close != nil {
 		v.actions.close()
 	}
 	ui.Column(c).Fill().Children(func() {
@@ -132,6 +135,25 @@ func (v *preferencesView) draw(c *ui.Context) {
 	})
 	if ui.AlertDialog(c, &v.confirmClear, "清空所有复制记录？", "此操作无法撤销。常用语和当前系统剪贴板不会被清空。", "确认清空", "取消") == 0 && v.actions.clear != nil {
 		v.actions.clear()
+	}
+	title, message, confirm := winVDialog(v.winVTarget, v.state.WinV)
+	if ui.AlertDialog(c, &v.confirmWinV, title, message, confirm, "取消") == 0 && v.actions.winV != nil {
+		v.actions.winV(v.winVTarget)
+	}
+}
+
+const explorerRestartNote = "Clipnest 会重启资源管理器：任务栏和桌面消失几秒后恢复，打开的文件夹窗口会尽量重新打开。"
+
+// winVDialog asks before Explorer restarts. Turning off a V that was there
+// before Clipnest restarts nothing.
+func winVDialog(on bool, state winVState) (title, message, confirm string) {
+	switch {
+	case on:
+		return "用 Win+V 打开 Clipnest？", explorerRestartNote + "之后 Win+V 不再打开系统的剪贴板面板（含表情、GIF 和云剪贴板），表情可用 Win+. 打开。", "重启资源管理器并开启"
+	case state == winVKept:
+		return "不再用 Win+V 打开 Clipnest？", "开启前 Win+V 已在系统里停用，关闭后它仍保持停用，不会打开任何面板。", "关闭"
+	default:
+		return "恢复系统的 Win+V？", explorerRestartNote + "之后 Win+V 重新打开系统的剪贴板面板。", "重启资源管理器并关闭"
 	}
 }
 
@@ -222,6 +244,18 @@ func (v *preferencesView) shortcuts(c *ui.Context) {
 		})
 		if v.state.ShortcutNotice != "" {
 			ui.Text(c, v.state.ShortcutNotice).FontSize(12).TextColor(c.Theme().Danger)
+		}
+		if v.state.Platform == "windows" {
+			ui.Row(c).FillWidth().Height(1).Background(c.Theme().Border)
+			v.row(c, "用 Win+V 打开 Clipnest", "代替系统的剪贴板面板，表情改用 Win+. 打开。Clipnest 未运行时，Win+V 没有反应。", func() {
+				on := v.state.WinV != winVOff
+				if ui.Switch(c, &on).Disabled(v.actions.winV == nil).Changed() {
+					v.winVTarget, v.confirmWinV = on, true
+				}
+			})
+			if v.state.WinVNotice != "" {
+				ui.Text(c, v.state.WinVNotice).FontSize(12).TextColor(c.Theme().Danger)
+			}
 		}
 	})
 	for _, group := range panelShortcuts() {
