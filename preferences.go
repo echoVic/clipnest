@@ -31,6 +31,12 @@ type PreferencesState struct {
 	// why it does not although it should.
 	WinV       winVState `json:"winV"`
 	WinVNotice string    `json:"winVNotice,omitempty"`
+	// DataDir is the data directory in use. DataDirFixed means --data-dir
+	// chose it, and DataDirNotice says what became of a move.
+	DataDir        string `json:"dataDir"`
+	DataDirDefault bool   `json:"dataDirDefault"`
+	DataDirFixed   bool   `json:"dataDirFixed"`
+	DataDirNotice  string `json:"dataDirNotice,omitempty"`
 }
 
 type preferencesWindow struct {

@@ -26,6 +26,10 @@ type preferencesActions struct {
 	clear             func()
 	openAtLogin       func(bool)
 	winV              func(bool)
+	openDataDir       func() error
+	pickDataDir       func()
+	restoreDataDir    func()
+	moveData          func(moveTarget)
 	update            func()
 	close             func()
 }
@@ -45,6 +49,8 @@ type preferencesView struct {
 	confirmClear      bool
 	confirmWinV       bool
 	winVTarget        bool
+	confirmMove       bool
+	moveTarget        moveTarget
 	ignoreDraft       string
 }
 
@@ -86,7 +92,7 @@ func (v *preferencesView) draw(c *ui.Context) {
 	if v.tab != shortcutsTab {
 		v.recordingShortcut = false
 	}
-	if !v.recordingShortcut && !v.confirmClear && !v.confirmWinV && !v.busy && (c.Shortcut(0, ui.KeyEscape) || c.Shortcut(ui.Cmd, ui.KeyW)) && v.actions.close != nil {
+	if !v.recordingShortcut && !v.confirmClear && !v.confirmWinV && !v.confirmMove && !v.busy && (c.Shortcut(0, ui.KeyEscape) || c.Shortcut(ui.Cmd, ui.KeyW)) && v.actions.close != nil {
 		v.actions.close()
 	}
 	ui.Column(c).Fill().Children(func() {
@@ -135,6 +141,10 @@ func (v *preferencesView) draw(c *ui.Context) {
 	title, message, confirm := winVDialog(v.winVTarget, v.state.WinV)
 	if ui.AlertDialog(c, &v.confirmWinV, title, message, confirm, "取消") == 0 && v.actions.winV != nil {
 		v.actions.winV(v.winVTarget)
+	}
+	title, message, confirm = moveDialog(v.moveTarget)
+	if ui.AlertDialog(c, &v.confirmMove, title, message, confirm, "取消") == 0 && v.actions.moveData != nil {
+		v.actions.moveData(v.moveTarget)
 	}
 }
 
@@ -428,6 +438,7 @@ func (v *preferencesView) storage(c *ui.Context) {
 				}
 			}
 		})
+		v.dataLocation(c)
 	})
 	v.group(c, "历史保留策略", func() {
 		v.row(c, "历史内容容量(MiB)", "", func() {

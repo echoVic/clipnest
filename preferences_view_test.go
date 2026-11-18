@@ -71,6 +71,8 @@ func TestPreferencesClearRequiresConfirmationAndEnterCancels(t *testing.T) {
 	cleared := 0
 	v.actions.clear = func() { cleared++ }
 	tt := ui.NewTester(v.draw, 620, 580)
+	// The storage page is taller than the window.
+	tt.Scroll(310, 400, 0, 400)
 	if err := tt.Click("清空…"); err != nil {
 		t.Fatal(err)
 	}
