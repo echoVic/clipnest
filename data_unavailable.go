@@ -47,10 +47,74 @@ func repickDataDir(picked, defaultDir string, confirmBlank func(dir string) bool
 	return true, writeDataLocation(defaultDir, dataLocation{Dir: t.dir})
 }
 
+// unavailableNext is what follows a button of the dialog.
+type unavailableNext int
+
+const (
+	unavailableAsk unavailableNext = iota // show the dialog again
+	unavailableRestart
+	unavailableQuitApp
+)
+
+// unavailableUI is what the dialog's buttons may ask besides.
+type unavailableUI struct {
+	pick         func(start string) (dir string, ok bool)
+	confirmBlank func(dir string) bool
+	showError    func(message string, err error)
+}
+
+// answerUnavailable carries out a button of the dialog about dir.
+func answerUnavailable(button int, dir, defaultDir string, ui unavailableUI) unavailableNext {
+	switch button {
+	case unavailableRetry:
+		return unavailableRestart
+	case unavailableRepick:
+		start := filepath.Dir(dir)
+		if dir == "" {
+			start, _ = os.UserHomeDir()
+		}
+		picked, ok := ui.pick(start)
+		if !ok {
+			return unavailableAsk
+		}
+		recorded, err := repickDataDir(picked, defaultDir, ui.confirmBlank)
+		if err != nil {
+			ui.showError("没能改用这个文件夹", err)
+			return unavailableAsk
+		}
+		if recorded {
+			return unavailableRestart
+		}
+		return unavailableAsk
+	case unavailableDefault:
+		if err := writeDataLocation(defaultDir, dataLocation{}); err != nil {
+			ui.showError("没能改回默认位置", err)
+			return unavailableAsk
+		}
+		return unavailableRestart
+	default:
+		return unavailableQuitApp
+	}
+}
+
 // runDataDirUnavailable runs Clipnest only to ask what to do about a data
 // directory it can't use, then restarts it or quits. It never creates that
 // directory or writes the data elsewhere on its own.
 func runDataDirUnavailable(dir string, problem error, defaultDir string) {
+	ui := unavailableUI{
+		pick: func(start string) (string, bool) {
+			paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{
+				Title: "选择数据位置", ButtonLabel: "选择", Message: "选 Clipnest 数据所在的文件夹，或一个新文件夹从空白开始",
+				Directory: true, CreateDirectories: true, DefaultPath: start,
+			})
+			if err != nil || len(paths) == 0 {
+				return "", false
+			}
+			return paths[0], true
+		},
+		confirmBlank: confirmBlankDataDir,
+		showError:    showDataDirError,
+	}
 	mygo.App.WhenReady(func() {
 		go func() {
 			mygo.App.Focus()
@@ -61,39 +125,11 @@ func runDataDirUnavailable(dir string, problem error, defaultDir string) {
 					mygo.App.Quit()
 					return
 				}
-				switch res.Button {
-				case unavailableRetry:
+				switch answerUnavailable(res.Button, dir, defaultDir, ui) {
+				case unavailableRestart:
 					mygo.App.Relaunch()
 					return
-				case unavailableRepick:
-					start := filepath.Dir(dir)
-					if dir == "" {
-						start, _ = os.UserHomeDir()
-					}
-					paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{
-						Title: "选择数据位置", ButtonLabel: "选择", Message: "选 Clipnest 数据所在的文件夹，或一个新文件夹从空白开始",
-						Directory: true, CreateDirectories: true, DefaultPath: start,
-					})
-					if err != nil || len(paths) == 0 {
-						continue
-					}
-					recorded, err := repickDataDir(paths[0], defaultDir, confirmBlankDataDir)
-					if err != nil {
-						showDataDirError("没能改用这个文件夹", err)
-						continue
-					}
-					if recorded {
-						mygo.App.Relaunch()
-						return
-					}
-				case unavailableDefault:
-					if err := writeDataLocation(defaultDir, dataLocation{}); err != nil {
-						showDataDirError("没能改回默认位置", err)
-						continue
-					}
-					mygo.App.Relaunch()
-					return
-				default:
+				case unavailableQuitApp:
 					mygo.App.Quit()
 					return
 				}
