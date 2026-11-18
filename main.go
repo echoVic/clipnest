@@ -70,23 +70,24 @@ func main() {
 	if !mygo.App.RequestSingleInstanceLock() {
 		return
 	}
-	dir := *dataDir
-	if dir == "" {
-		base, err := os.UserConfigDir()
-		if err != nil {
+	defaultDir, err := defaultDataDir()
+	if err != nil {
+		log.Fatal(err)
+	}
+	choice := chooseDataDir(*dataDir, defaultDir)
+	data, err := openDataDir(choice, defaultDir)
+	if err != nil {
+		// The default directory and --data-dir fail as they always have; a
+		// directory chosen in the preferences may be on a disk that isn't
+		// connected, so Clipnest asks.
+		if choice.fixed || samePath(choice.dir, defaultDir) {
 			log.Fatal(err)
 		}
-		dir = filepath.Join(base, "Clipnest")
+		runDataDirUnavailable(choice.dir, err, defaultDir)
+		return
 	}
-	unlock, err := acquireDataLock(dir)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer unlock()
-	store, err := openStorage(dir)
-	if err != nil {
-		log.Fatal(err)
-	}
+	defer data.unlock()
+	dir, store := data.dir, data.store
 	defer func() {
 		if err := store.Close(); err != nil {
 			log.Print("存储关闭失败：", err)
@@ -96,7 +97,8 @@ func main() {
 	shortcutPath := filepath.Join(dir, "shortcut.json")
 	shortcutAccelerator, shortcutErr := loadShortcutConfig(shortcutPath)
 	d := &Desktop{h: h, p: store.Phrases, storage: store, lastRevision: -2, stop: make(chan struct{}),
-		shortcutPath: shortcutPath, shortcutAccelerator: shortcutAccelerator}
+		shortcutPath: shortcutPath, shortcutAccelerator: shortcutAccelerator,
+		data: dataDirInfo{dir: dir, defaultDir: defaultDir, fixed: choice.fixed, notice: data.notice}}
 	if shortcutErr != nil {
 		log.Print("快捷键配置读取失败：", shortcutErr)
 		d.shortcutNotice = "快捷键配置无法读取，已尝试默认快捷键；可在「偏好设置 → 快捷键」中重新录入"

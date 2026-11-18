@@ -73,6 +73,7 @@ type Desktop struct {
 	shortcutPath          string
 	shortcutNotice        string
 	winVNotice            string
+	data                  dataDirInfo
 	winVRegistered        bool
 	busy                  bool
 	quitting              bool

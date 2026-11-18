@@ -84,6 +84,9 @@ type dataDirChoice struct {
 // folder that moved, not a first launch.
 func chooseDataDir(flagDir, defaultDir string) dataDirChoice {
 	if flagDir != "" {
+		if abs, err := filepath.Abs(flagDir); err == nil {
+			flagDir = abs
+		}
 		return dataDirChoice{dir: flagDir, fixed: true}
 	}
 	loc, err := readDataLocation(defaultDir)

@@ -139,6 +139,8 @@ func (d *Desktop) preferencesState() PreferencesState {
 		Platform:       runtime.GOOS, Version: applicationVersion(), ExcludedApps: d.ExcludedApps(),
 		Privacy: d.Privacy(), OpenAtLogin: mygo.App.OpenAtLogin(), ImageTextNote: imageTextNote(),
 		WinV: d.winVState(), WinVNotice: d.winVNotice,
+		DataDir: d.data.dir, DataDirDefault: samePath(d.data.dir, d.data.defaultDir),
+		DataDirFixed: d.data.fixed, DataDirNotice: d.data.notice,
 	}
 }
 
@@ -223,7 +225,11 @@ func newPreferencesWindow(d *Desktop) *preferencesWindow {
 			}
 			p.run(func() error { return d.setWinV(on) }, success, false)
 		},
-		update: d.CheckForUpdates,
+		openDataDir:    d.openDataDir,
+		pickDataDir:    p.pickDataDir,
+		restoreDataDir: func() { go p.chooseDataDir(d.data.defaultDir) },
+		moveData:       p.moveData,
+		update:         d.CheckForUpdates,
 		close: func() {
 			if !v.busy {
 				v.recordingShortcut = false
