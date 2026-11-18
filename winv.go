@@ -13,6 +13,10 @@ import (
 // restarts Explorer again, so that it takes Win+V back.
 const winVAccelerator = "Super+V"
 
+// restartExplorerFlag makes Clipnest restart Explorer and exit, so that the
+// new Explorer inherits the environment Clipnest started that process with.
+const restartExplorerFlag = "restart-explorer"
+
 // winVState is what Clipnest remembers about the V, so that turning off
 // removes only a V that Clipnest added.
 type winVState int

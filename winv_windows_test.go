@@ -5,7 +5,9 @@ package main
 import (
 	"errors"
 	"os"
+	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 
 	"golang.org/x/sys/windows/registry"
@@ -90,6 +92,44 @@ func TestWinVRegistryDeletesTheValueItCreated(t *testing.T) {
 	}
 	if _, err := readDisabledHotkeys(t, k); !errors.Is(err, registry.ErrNotExist) {
 		t.Fatal("DisabledHotkeys left behind:", err)
+	}
+}
+
+// Explorer inherits the environment of the process that restarts it, and
+// every app started from the shell inherits Explorer's, so the restarter
+// gets the user's own rather than Clipnest's.
+func TestExplorerRestarterHasTheUsersEnvironment(t *testing.T) {
+	t.Setenv("CLIPNEST_TEST_ONLY", "1")
+	cmd, err := explorerRestarter()
+	if err != nil {
+		t.Fatal(err)
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cmd.Path != exe || !reflect.DeepEqual(cmd.Args[1:], []string{"--" + restartExplorerFlag}) {
+		t.Fatal(cmd.Path, cmd.Args)
+	}
+	env := map[string]string{}
+	for _, kv := range cmd.Env {
+		if k, v, ok := strings.Cut(kv, "="); ok && k != "" {
+			env[strings.ToUpper(k)] = v
+		}
+	}
+	if _, ok := env["CLIPNEST_TEST_ONLY"]; ok {
+		t.Fatal("the restarter inherits Clipnest's environment")
+	}
+	for _, k := range []string{"SYSTEMROOT", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "PATH", "TEMP", "USERNAME", "USERDOMAIN"} {
+		if env[k] == "" {
+			t.Errorf("%s missing", k)
+		}
+	}
+	// What differs from this process's environment, which came from Explorer.
+	for _, kv := range os.Environ() {
+		if k, v, ok := strings.Cut(kv, "="); ok && k != "" && env[strings.ToUpper(k)] != v {
+			t.Logf("differs: %s=%q, restarter %q", k, v, env[strings.ToUpper(k)])
+		}
 	}
 }
 

@@ -23,9 +23,16 @@ func main() {
 	webAddress := flag.String("web", "", "启动仅含示例数据的浏览器交互演示")
 	dataDir := flag.String("data-dir", "", "历史与常用语的存储目录")
 	restoreWinV := flag.Bool("restore-win-v", false, "把 Win+V 交还给系统后退出，卸载时运行")
+	restartExplorerNow := flag.Bool(restartExplorerFlag, false, "重启资源管理器后退出，供 Win+V 开关使用")
 	flag.Parse()
 	if *restoreWinV {
 		if err := turnOffWinV(systemWinV()); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+	if *restartExplorerNow {
+		if err := restartExplorerHere(); err != nil {
 			log.Fatal(err)
 		}
 		return

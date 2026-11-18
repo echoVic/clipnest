@@ -19,3 +19,5 @@ func systemWinV() winVSystem {
 		unregister:      func() {},
 	}
 }
+
+func restartExplorerHere() error { return errWinVUnsupported }

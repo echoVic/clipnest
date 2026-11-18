@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"syscall"
@@ -175,10 +176,44 @@ func rmError(name string, r uintptr) error {
 	return fmt.Errorf("%s: %w", name, syscall.Errno(r))
 }
 
-// restartExplorer restarts this session's Explorer with Restart Manager,
+// restartExplorer restarts Explorer from a Clipnest process that has the
+// user's environment as Windows builds it at sign-in. The new Explorer
+// inherits that process's environment, and every app started from the shell
+// inherits Explorer's; Clipnest's own can be older than Explorer's, which
+// takes in changed variables as they change, or carry an installer's.
+func restartExplorer() error {
+	cmd, err := explorerRestarter()
+	if err != nil {
+		return err
+	}
+	return cmd.Run()
+}
+
+func explorerRestarter() (*exec.Cmd, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return nil, err
+	}
+	// CreateEnvironmentBlock leaves out USERNAME and USERDOMAIN without
+	// duplicate and impersonate access, which the pseudo-token lacks.
+	var token windows.Token
+	if err := windows.OpenProcessToken(windows.CurrentProcess(), windows.TOKEN_QUERY|windows.TOKEN_DUPLICATE|windows.TOKEN_IMPERSONATE, &token); err != nil {
+		return nil, err
+	}
+	defer token.Close()
+	env, err := token.Environ(false)
+	if err != nil {
+		return nil, err
+	}
+	cmd := exec.Command(exe, "--"+restartExplorerFlag)
+	cmd.Env = env
+	return cmd, nil
+}
+
+// restartExplorerHere restarts this session's Explorer with Restart Manager,
 // as installers do, so that it reopens the folder windows it had. Explorer
 // reads DisabledHotkeys only when it starts.
-func restartExplorer() error {
+func restartExplorerHere() error {
 	shell, ok := shellProcess()
 	if !ok {
 		// The Explorer that starts next reads the new letters.
