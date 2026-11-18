@@ -37,7 +37,7 @@ export function imageTextPreview(document, e, copy) {
 // imageTextSetting describes the privacy switch for a panel state.
 export function imageTextSetting(state, demo) {
   const storage = state.storage || {};
-  if (!demo && state.platform !== 'darwin') return { available: false, checked: false, note: '图片文字识别仅适用于 macOS。' };
+  if (!demo && state.platform !== 'darwin' && state.platform !== 'windows') return { available: false, checked: false, note: '图片文字识别仅适用于 macOS 和 Windows。' };
   if (storage.backend !== 'sqlite') return { available: false, checked: false, note: '迁移到 SQLite 后可识别图片文字。' };
   return {
     available: true, checked: !!storage.imageText,

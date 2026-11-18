@@ -5,8 +5,8 @@ import "github.com/egoist/mygo/ui"
 func (v *preferencesView) imageText(c *ui.Context) {
 	v.group(c, "图片文字", func() {
 		switch {
-		case v.state.Platform != "darwin":
-			ui.Text(c, "图片文字识别仅适用于 macOS。").FontSize(12).TextColor(c.Theme().TextMuted)
+		case v.state.Platform != "darwin" && v.state.Platform != "windows":
+			ui.Text(c, "图片文字识别仅适用于 macOS 和 Windows。").FontSize(12).TextColor(c.Theme().TextMuted)
 		case v.state.Storage.Backend != "sqlite":
 			ui.Text(c, "迁移到 SQLite 后可识别图片文字。").FontSize(12).TextColor(c.Theme().TextMuted)
 		default:
@@ -17,6 +17,9 @@ func (v *preferencesView) imageText(c *ui.Context) {
 					v.actions.imageText(on)
 				}
 			})
+			if v.state.ImageTextNote != "" {
+				ui.Text(c, v.state.ImageTextNote).FontSize(12).TextColor(c.Theme().TextMuted)
+			}
 		}
 	})
 }

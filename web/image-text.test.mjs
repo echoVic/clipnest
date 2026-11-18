@@ -54,7 +54,7 @@ test('every other state explains itself without a copy action', () => {
   assert.equal(preview({ kind: 'text', imageTextState: 'ready', imageText: 'x' }), null);
 });
 
-test('the privacy switch needs macOS and SQLite; the browser demo stands in for macOS', () => {
+test('the privacy switch needs macOS or Windows and SQLite; the browser demo stands in for them', () => {
   const sqlite = on => ({ backend: 'sqlite', imageText: on });
   assert.deepEqual(
     [true, false].map(on => imageText.imageTextSetting({ platform: 'darwin', storage: sqlite(on) }, false)).map(s => [s.available, s.checked]),
@@ -62,8 +62,10 @@ test('the privacy switch needs macOS and SQLite; the browser demo stands in for 
   );
   const json = imageText.imageTextSetting({ platform: 'darwin', storage: { backend: 'json', imageText: false } }, false);
   assert.equal(json.available, false); assert.match(json.note, /迁移到 SQLite/);
+  const windows = imageText.imageTextSetting({ platform: 'windows', storage: sqlite(true) }, false);
+  assert.equal(windows.available, true); assert.equal(windows.checked, true);
   const linux = imageText.imageTextSetting({ platform: 'linux', storage: sqlite(true) }, false);
-  assert.equal(linux.available, false); assert.equal(linux.checked, false); assert.match(linux.note, /仅适用于 macOS/);
+  assert.equal(linux.available, false); assert.equal(linux.checked, false); assert.match(linux.note, /仅适用于 macOS 和 Windows/);
   const demo = imageText.imageTextSetting({ platform: 'demo', storage: sqlite(true) }, true);
   assert.equal(demo.available, true); assert.match(demo.note, /演示/);
 });

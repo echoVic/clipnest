@@ -1,4 +1,4 @@
-"""Render the screenshots image_text_darwin_test.go recognizes with Vision.
+"""Render the screenshots the image-text tests recognize with Vision and Windows.
 
 Run from the repository root on macOS (uses system fonts):
     python3 testdata/image-text/make_fixtures.py

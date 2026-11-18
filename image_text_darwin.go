@@ -56,6 +56,10 @@ func (d *Desktop) runImageText() {
 // QOS_CLASS_UTILITY in sys/qos.h.
 const qosUtility = 0x11
 
+// imageTextNote has nothing to add: Vision reads every language it supports
+// without installing anything.
+func imageTextNote() string { return "" }
+
 // recognizeImageText returns the lines Vision reads in a PNG. An image larger
 // than a tile is decoded once, then each region is encoded and recognized with
 // its own request and autorelease pool, which bounds Vision's memory to about

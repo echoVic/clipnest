@@ -25,6 +25,8 @@ type PreferencesState struct {
 	// OpenAtLogin is the system's state, which the user can also change in
 	// System Settings or Task Manager.
 	OpenAtLogin bool `json:"openAtLogin"`
+	// ImageTextNote says which languages the system cannot recognize yet.
+	ImageTextNote string `json:"imageTextNote,omitempty"`
 }
 
 type preferencesWindow struct {
@@ -121,7 +123,7 @@ func (d *Desktop) preferencesState() PreferencesState {
 		ClipboardAccess: d.clipboardAccess, Shortcut: d.shortcut, Storage: d.StorageStatus(),
 		ShortcutNotice: d.shortcutNotice,
 		Platform:       runtime.GOOS, Version: applicationVersion(), ExcludedApps: d.ExcludedApps(),
-		Privacy: d.Privacy(), OpenAtLogin: mygo.App.OpenAtLogin(),
+		Privacy: d.Privacy(), OpenAtLogin: mygo.App.OpenAtLogin(), ImageTextNote: imageTextNote(),
 	}
 }
 

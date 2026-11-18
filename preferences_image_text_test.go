@@ -34,12 +34,13 @@ func TestPreferencesImageTextSwitchesRecognition(t *testing.T) {
 	}
 }
 
-func TestPreferencesImageTextNeedsSQLiteOnMacOS(t *testing.T) {
+func TestPreferencesImageTextNeedsSQLiteOnMacOSAndWindows(t *testing.T) {
 	for _, c := range []struct {
 		platform, backend, note string
 	}{
 		{"darwin", "json", "迁移到 SQLite 后可识别图片文字"},
-		{"linux", "sqlite", "图片文字识别仅适用于 macOS"},
+		{"windows", "json", "迁移到 SQLite 后可识别图片文字"},
+		{"linux", "sqlite", "图片文字识别仅适用于 macOS 和 Windows"},
 	} {
 		v := settingsView()
 		v.tab, v.state.Platform, v.state.Storage.Backend = 1, c.platform, c.backend
@@ -51,5 +52,27 @@ func TestPreferencesImageTextNeedsSQLiteOnMacOS(t *testing.T) {
 		if _, found := tt.Find("识别图片文字"); found {
 			t.Fatal("unavailable setting shows a switch", c.platform, c.backend)
 		}
+	}
+}
+
+// Windows recognizes only the languages installed for it, and preferences
+// say what is missing below the switch.
+func TestPreferencesImageTextShowsTheWindowsLanguageNote(t *testing.T) {
+	v := settingsView()
+	v.tab, v.state.Platform, v.state.Storage.ImageText = 1, "windows", true
+	v.state.ImageTextNote = "未安装中文文字识别，截图中的中文可能识别不出。"
+	changes := []bool{}
+	v.actions.imageText = func(on bool) { changes = append(changes, on) }
+	tt := ui.NewTester(v.draw, 520, 1400)
+	if !tt.HasText("未安装中文文字识别") {
+		t.Fatal("language note missing", tt.Texts())
+	}
+	if err := tt.Click("识别图片文字"); err != nil || !reflect.DeepEqual(changes, []bool{false}) {
+		t.Fatal("Windows switch did not turn recognition off", changes, err)
+	}
+	v.state.ImageTextNote = ""
+	tt.Frame()
+	if tt.HasText("未安装中文文字识别") {
+		t.Fatal("stale language note")
 	}
 }
