@@ -37,7 +37,7 @@
 
 ## 隐私与数据
 
-- 不上传、不联网分析。数据在 macOS 的 `~/Library/Application Support/Clipnest/clipnest.sqlite3` 和 Windows 的 `%AppData%\Clipnest\clipnest.sqlite3`。
+- 不上传、不联网分析。数据默认在 macOS 的 `~/Library/Application Support/Clipnest/clipnest.sqlite3` 和 Windows 的 `%AppData%\Clipnest\clipnest.sqlite3`。偏好设置 →「存储」→「数据位置」可以换到别的文件夹或磁盘：数据复制过去并校验后重启，新位置打开成功后删掉旧位置的数据。磁盘没接上时，Clipnest 启动会询问，不会在别处新建数据。
 - 新安装使用 SQLite（文件权限 0600），不是加密存储；需要时暂停记录或清空历史。
 - 单条文本上限 512 KiB，图片 8 MiB、最长边 16000 像素；超过限制跳过。
 - 带敏感标记的剪贴板会被忽略（macOS 的 `ConcealedType` 等，Windows 的 `ExcludeClipboardContentFromMonitorProcessing`）。没有标记的内容只能按格式识别：遮罩只影响显示和搜索，数据库里仍是原文；识别不到的格式请用忽略规则。设置保存在数据目录的 `privacy.json`。
