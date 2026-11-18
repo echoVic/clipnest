@@ -78,28 +78,54 @@ func TestImageTextWordsKeepChineseLinesAndTheirNumbers(t *testing.T) {
 	assertLines(t, wordLines(864, 180, zh[1:2], nil), "lnvoice #INV-2026-0042 Total $42.50")
 }
 
-// An English line no Chinese line covers keeps its place in the English
-// engine's reading order.
-func TestImageTextWordsKeepLinesOnlyTheEnglishEngineRead(t *testing.T) {
-	zh := [][]ocrWord{
+// Both engines' words for a Go snippet on a dark background.
+func goDarkWords() (zh, en [][]ocrWord) {
+	zh = [][]ocrWord{
 		{{"func", textBox{42, 35, 60, 20}}, {"（", textBox{125, 34, 6, 23}}, {"s", textBox{138, 41, 11, 14}}, {"*Store)", textBox{169, 34, 106, 23}}, {"Save(ctx", textBox{297, 34, 126, 23}}, {"context", textBox{442, 37, 107, 18}}, {".Context)", textBox{557, 34, 134, 23}}, {"e", textBox{713, 40, 14, 15}}, {"r", textBox{732, 41, 11, 14}}, {"ro", textBox{748, 41, 26, 14}}, {"r", textBox{780, 41, 11, 14}}, {"{", textBox{810, 34, 11, 24}}},
 		{{"s.db.PingContext(ctx);", textBox{266, 78, 344, 26}}, {"e", textBox{633, 84, 14, 15}}, {"r", textBox{652, 85, 11, 14}}, {"r", textBox{668, 85, 11, 14}}, {"！", textBox{702, 80, 4, 19}}, {"=", textBox{713, 87, 14, 8}}, {"nil", textBox{746, 79, 44, 20}}, {"{", textBox{810, 78, 11, 24}}},
 		{{"return", textBox{172, 125, 90, 18}}, {"fmt.Errorf(\"ping", textBox{282, 122, 252, 26}}, {"：", textBox{541, 129, 5, 14}}, {"%w\"", textBox{568, 123, 44, 20}}, {"，", textBox{620, 138, 6, 9}}, {"e", textBox{649, 128, 14, 15}}, {"r", textBox{668, 129, 11, 14}}, {"r", textBox{684, 129, 11, 14}}, {"）", textBox{700, 122, 7, 23}}},
 		{{"return", textBox{108, 213, 90, 18}}, {"niI", textBox{218, 211, 44, 20}}},
 	}
-	en := [][]ocrWord{
+	en = [][]ocrWord{
 		{{"func", textBox{42, 35, 60, 20}}, {"(s", textBox{125, 34, 24, 23}}, {"*Store)", textBox{169, 34, 106, 23}}, {"Save(ctx", textBox{297, 34, 126, 23}}, {"context.", textBox{442, 37, 120, 18}}, {"Context)", textBox{569, 34, 122, 23}}, {"error", textBox{713, 40, 78, 15}}, {"{", textBox{810, 34, 11, 24}}},
 		{{"s.db.PingContext(ctx);", textBox{266, 78, 344, 26}}, {"err", textBox{633, 84, 46, 15}}, {"!=", textBox{702, 80, 25, 19}}, {"nil", textBox{746, 79, 44, 20}}, {"{", textBox{810, 78, 11, 24}}},
 		{{"if", textBox{107, 79, 27, 20}}, {"err", textBox{153, 84, 46, 15}}, {".", textBox{221, 94, 4, 5}}},
 		{{"return", textBox{172, 125, 90, 18}}, {"fmt.Errorf(\"ping:", textBox{282, 122, 264, 26}}, {"%w\",", textBox{568, 123, 58, 24}}, {"err)", textBox{649, 122, 58, 23}}},
 		{{"return", textBox{108, 213, 90, 18}}, {"nil", textBox{218, 211, 44, 20}}},
 	}
+	return zh, en
+}
+
+// Windows ends a line at a symbol it cannot read, here := in Go, and lists
+// the rest of the row as another line, after it. Fragments of a row join.
+func TestImageTextWordsJoinLinesSplitOnOneRow(t *testing.T) {
+	zh, en := goDarkWords()
 	assertLines(t, wordLines(864, 324, zh, en),
 		"func (s *Store) Save(ctx context.Context) error {",
-		"s.db.PingContext(ctx); err != nil {",
-		"if err .",
+		"if err . s.db.PingContext(ctx); err != nil {",
 		`return fmt.Errorf("ping: %w", err)`,
 		"return nil")
+}
+
+// An English line no Chinese line covers keeps its place in the English
+// engine's reading order; here the Chinese engine missed the third line.
+func TestImageTextWordsKeepLinesOnlyTheEnglishEngineRead(t *testing.T) {
+	zh, en := goDarkWords()
+	assertLines(t, wordLines(864, 324, [][]ocrWord{zh[0], zh[1], zh[3]}, en),
+		"func (s *Store) Save(ctx context.Context) error {",
+		"if err . s.db.PingContext(ctx); err != nil {",
+		`return fmt.Errorf("ping: %w", err)`,
+		"return nil")
+}
+
+// A column further away on the same row stays a line of its own, as a file
+// name in a sidebar beside code.
+func TestImageTextWordsKeepColumnsOnOneRowApart(t *testing.T) {
+	en := [][]ocrWord{
+		{{"func", textBox{600, 60, 60, 22}}, {"main()", textBox{680, 60, 90, 22}}},
+		{{"image_text.go", textBox{30, 61, 150, 22}}},
+	}
+	assertLines(t, wordLines(1000, 200, nil, en), "func main()", "image_text.go")
 }
 
 // Windows ends a word at a dot inside code. Such a split is narrower than

@@ -38,6 +38,9 @@ const (
 	// Camel case such as Begin Tx splits between letters. Only a gap this
 	// tight joins letters, under any proportional font's space.
 	latinLetterGap = 0.25
+	// Lines of one row this close, in line heights, are one line: a few
+	// characters apart. Columns on a row are further apart.
+	rowFragmentGap = 3
 )
 
 // asciiMarks are the full-width marks the Chinese engine writes for ASCII
@@ -230,14 +233,15 @@ func nonEmptyLines(lines [][]ocrWord) [][]ocrWord {
 // engine; either may be missing. A Chinese line that holds Chinese, or that
 // no English line covers, is kept. Any other line is replaced by the English
 // lines covering it. English lines no Chinese line covers follow the English
-// line they follow in the English engine's reading order.
+// line they follow in the English engine's reading order. Fragments of a row
+// are then joined.
 func fuseWordLines(zh, en [][]ocrWord) [][]ocrWord {
 	zh, en = nonEmptyLines(zh), nonEmptyLines(en)
 	if len(en) == 0 {
 		for i := range zh {
 			zh[i] = normalizeMarks(zh[i])
 		}
-		return zh
+		return joinRowFragments(zh)
 	}
 	out := [][]ocrWord{}
 	at := make([]int, len(en)) // the line in out that covers each English line
@@ -281,7 +285,32 @@ func fuseWordLines(zh, en [][]ocrWord) [][]ocrWord {
 	for i, l := range out {
 		fused = append(append(fused, l), follows[i]...)
 	}
-	return fused
+	return joinRowFragments(fused)
+}
+
+// joinRowFragments joins lines that continue each other on one row. Windows
+// ends a line at a symbol it cannot read, as := in Go, and lists the rest of
+// the row as another line, even before the first part. The joined line takes
+// the place of the earlier one.
+func joinRowFragments(lines [][]ocrWord) [][]ocrWord {
+	out := slices.Clone(lines)
+	for i := 0; i < len(out); i++ {
+		for j := i + 1; j < len(out); j++ {
+			left, right := out[i], out[j]
+			if lineBox(right).X < lineBox(left).X {
+				left, right = right, left
+			}
+			a, b := lineBox(left), lineBox(right)
+			h := max(lineHeight(left), lineHeight(right))
+			if verticalOverlap(a, b) <= 0.5 || b.X < a.right() || b.X-a.right() > rowFragmentGap*h {
+				continue
+			}
+			out[i] = append(slices.Clone(left), right...)
+			out = slices.Delete(out, j, j+1)
+			j = i // the joined line may reach another fragment
+		}
+	}
+	return out
 }
 
 // addWordLines appends lines rebuilt from words in image pixels. Only lines

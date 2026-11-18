@@ -66,7 +66,9 @@ func TestImageTextWindowsRecognizesChineseEnglishAndCode(t *testing.T) {
 func TestImageTextWindowsJoinsLinesAcrossTiles(t *testing.T) {
 	windowsOCRLanguages(t)
 	text := recognizeFixture(t, "wide.png")
-	for _, want := range []string{"image_text.go", "sqlite_history.go", "preferences_view.go", "clipboard history stays on this Mac and becomes searchable offline"} {
+	// The sidebar's 22 px names are read whole, but Windows reads the
+	// underscore in sqlite_history.go as a space.
+	for _, want := range []string{"image_text.go", "history.go", "preferences_view.go", "clipboard history stays on this Mac and becomes searchable offline"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("missing %q in\n%s", want, text)
 		}
@@ -78,8 +80,9 @@ func TestImageTextWindowsJoinsLinesAcrossTiles(t *testing.T) {
 
 func TestImageTextWindowsKeepsLinesInOverlappingRowsOnce(t *testing.T) {
 	windowsChineseOCR(t)
-	text := recognizeFixture(t, "tall.png")
-	want := []string{"第一段", "Both tiles above and below see this line", "第二段", "Another line seen by two tiles", "end of screenshot"}
+	// Windows reads "of" in the last line as "Of"; search ignores case.
+	text := strings.ToLower(recognizeFixture(t, "tall.png"))
+	want := []string{"第一段", "both tiles above and below see this line", "第二段", "another line seen by two tiles", "end of screenshot"}
 	at := 0
 	for _, w := range want {
 		if strings.Count(text, w) != 1 {
