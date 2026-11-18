@@ -81,6 +81,23 @@ func TestPreferencesWinVSwitchTurnsOffWhatItTurnedOn(t *testing.T) {
 	}
 }
 
+// The panel's shortcuts make the tab longer than the window, so what turning
+// the switch on or recording a shortcut reports shows under the summon
+// group rather than at the end of the list.
+func TestPreferencesShortcutsNoticeShowsAboveThePanelShortcuts(t *testing.T) {
+	v := winVSettingsView()
+	v.notice, v.failed = "资源管理器仍占用 Win+V，请注销后重新登录再试", true
+	tt := ui.NewTester(v.draw, 620, 580)
+	notice, ok := tt.Find(v.notice)
+	if !ok {
+		t.Fatal("notice missing", tt.Texts())
+	}
+	panel, ok := tt.Find("面板")
+	if !ok || notice.Y > panel.Y || notice.Y+notice.H > 580 {
+		t.Fatal("notice out of sight", notice, panel)
+	}
+}
+
 func TestPreferencesWinVNoticeShowsWhyWinVDoesNotWork(t *testing.T) {
 	v := winVSettingsView()
 	v.state.WinV, v.state.WinVNotice = winVAdded, "资源管理器仍占用 Win+V"

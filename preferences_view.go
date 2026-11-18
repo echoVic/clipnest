@@ -123,12 +123,8 @@ func (v *preferencesView) draw(c *ui.Context) {
 				case shortcutsTab:
 					v.shortcuts(c)
 				}
-				if v.notice != "" {
-					color := theme.TextMuted
-					if v.failed {
-						color = theme.Danger
-					}
-					ui.Text(c, v.notice).FontSize(12).TextColor(color)
+				if v.tab != shortcutsTab {
+					v.noticeText(c)
 				}
 			})
 		})
@@ -142,6 +138,18 @@ func (v *preferencesView) draw(c *ui.Context) {
 	}
 }
 
+// noticeText shows what the last action reported.
+func (v *preferencesView) noticeText(c *ui.Context) {
+	if v.notice == "" {
+		return
+	}
+	color := c.Theme().TextMuted
+	if v.failed {
+		color = c.Theme().Danger
+	}
+	ui.Text(c, v.notice).FontSize(12).TextColor(color)
+}
+
 const explorerRestartNote = "Clipnest 会重启资源管理器：任务栏和桌面消失几秒后恢复，打开的文件夹窗口会尽量重新打开。"
 
 // winVDialog asks before Explorer restarts. Turning off a V that was there
@@ -149,7 +157,7 @@ const explorerRestartNote = "Clipnest 会重启资源管理器：任务栏和桌
 func winVDialog(on bool, state winVState) (title, message, confirm string) {
 	switch {
 	case on:
-		return "用 Win+V 打开 Clipnest？", explorerRestartNote + "之后 Win+V 不再打开系统的剪贴板面板（含表情、GIF 和云剪贴板），表情可用 Win+. 打开。", "重启资源管理器并开启"
+		return "用 Win+V 打开 Clipnest？", explorerRestartNote + "之后 Win+V 打开 Clipnest，系统面板里的表情、GIF 和剪贴板历史改用 Win+. 打开。", "重启资源管理器并开启"
 	case state == winVKept:
 		return "不再用 Win+V 打开 Clipnest？", "开启前 Win+V 已在系统里停用，关闭后它仍保持停用，不会打开任何面板。", "关闭"
 	default:
@@ -247,7 +255,7 @@ func (v *preferencesView) shortcuts(c *ui.Context) {
 		}
 		if v.state.Platform == "windows" {
 			ui.Row(c).FillWidth().Height(1).Background(c.Theme().Border)
-			v.row(c, "用 Win+V 打开 Clipnest", "代替系统的剪贴板面板，表情改用 Win+. 打开。Clipnest 未运行时，Win+V 没有反应。", func() {
+			v.row(c, "用 Win+V 打开 Clipnest", "代替系统的剪贴板面板。系统面板里的表情、GIF 和剪贴板历史改用 Win+. 打开；Clipnest 未运行时，Win+V 没有反应。", func() {
 				on := v.state.WinV != winVOff
 				if ui.Switch(c, &on).Disabled(v.actions.winV == nil).Changed() {
 					v.winVTarget, v.confirmWinV = on, true
@@ -257,6 +265,8 @@ func (v *preferencesView) shortcuts(c *ui.Context) {
 				ui.Text(c, v.state.WinVNotice).FontSize(12).TextColor(c.Theme().Danger)
 			}
 		}
+		// The panel's shortcuts below run past the window.
+		v.noticeText(c)
 	})
 	for _, group := range panelShortcuts() {
 		v.group(c, group.Group, func() {
