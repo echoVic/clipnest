@@ -45,6 +45,15 @@ func TestResolveTargetFolders(t *testing.T) {
 		t.Fatal("its Clipnest folder has data:", got, err)
 	}
 
+	// Another app's phrases.json, or JSON data from before SQLite, is not
+	// data to switch to: Clipnest would open it as JSON storage that can't
+	// move, and later delete files by such common names.
+	others := filepath.Join(root, "Others")
+	writeFile(t, filepath.Join(others, "phrases.json"))
+	if got, err := resolveTarget(others, current, def); err != nil || got.dir != filepath.Join(others, "Clipnest") || got.existing {
+		t.Fatal("a folder with another phrases.json:", got, err)
+	}
+
 	crowded := filepath.Join(root, "Crowded")
 	writeFile(t, filepath.Join(crowded, "notes.txt"))
 	writeFile(t, filepath.Join(crowded, "Clipnest", "photo.jpg"))

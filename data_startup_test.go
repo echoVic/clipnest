@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 // movedData moves a storage from old to target the way the preferences do,
@@ -22,7 +23,7 @@ func movedData(t *testing.T, old, def string) (target string) {
 	s.History.Add(entry(t, "搬家"))
 	target = filepath.Join(t.TempDir(), "New")
 	if err := s.MoveTo(target, func() error {
-		return writeDataLocation(def, dataLocation{Dir: target, Previous: old})
+		return commitMove(def, dataLocation{Dir: target, Previous: old})
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -219,10 +220,197 @@ func TestOpenDataDirLeavesALockedNewPlaceAlone(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer unlock()
+	defer func(wait time.Duration) { lockWait = wait }(lockWait)
+	lockWait = 100 * time.Millisecond
 	if d := openChosen(t, def); d.dir != old {
 		t.Fatal(d.dir)
 	}
 	if found, _ := hasClipnestData(target); !found {
 		t.Fatal("deleted the files of the instance using it")
+	}
+}
+
+// readOnly makes dir read-only until the test ends.
+func readOnly(t *testing.T, dir string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("permission bits don't make a folder read-only on Windows")
+	}
+	if err := os.Chmod(dir, 0500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0700) })
+}
+
+// A launch never runs on a place whose move it can't commit: a later launch
+// would still take it for an unused copy, and delete it on going back.
+func TestOpenDataDirUndoesAMoveItCantCommit(t *testing.T) {
+	root := t.TempDir()
+	def := filepath.Join(root, "Default")
+	old := filepath.Join(root, "Old")
+	target := movedData(t, old, def)
+	readOnly(t, def)
+	d, err := openDataDir(chooseDataDir("", def), def)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.dir != old || !strings.Contains(d.notice, "改回") {
+		t.Fatal(d.dir, d.notice)
+	}
+	if found, _ := hasClipnestData(target); found {
+		t.Fatal("left a copy a later launch would open")
+	}
+	if err := d.store.History.Add(entry(t, "撤销之后")); err != nil {
+		t.Fatal(err)
+	}
+	d.store.Close()
+	d.unlock()
+
+	os.Chmod(def, 0700)
+	d = openChosen(t, def)
+	if d.dir != old {
+		t.Fatal(d.dir)
+	}
+	if entries, _ := storedSnapshot(t, d.store.History); len(entries) != 2 {
+		t.Fatal("history:", entries)
+	}
+	if loc, err := readDataLocation(def); err != nil || loc != (dataLocation{Dir: old}) {
+		t.Fatal("record:", loc, err)
+	}
+}
+
+// Going back to an old place that is gone creates nothing there and keeps
+// the copy, which may be all that is left.
+func TestOpenDataDirChecksTheOldPlaceBeforeGoingBack(t *testing.T) {
+	root := t.TempDir()
+	def := filepath.Join(root, "Default")
+	old := filepath.Join(root, "Old")
+	target := movedData(t, old, def)
+	if err := os.WriteFile(filepath.Join(target, "privacy.json"), []byte("{"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(old); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := openDataDir(chooseDataDir("", def), def); err == nil {
+		t.Fatal("opened")
+	}
+	if _, err := os.Stat(old); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatal("created the old place again:", err)
+	}
+	if found, _ := hasClipnestData(target); !found {
+		t.Fatal("deleted the copy")
+	}
+	if loc, _ := readDataLocation(def); loc != (dataLocation{Dir: target, Previous: old}) {
+		t.Fatal("record changed:", loc)
+	}
+}
+
+// An old place that can't be reached keeps its data, and the notice says so.
+func TestOpenDataDirReportsAnOldPlaceItCantReach(t *testing.T) {
+	root := t.TempDir()
+	def := filepath.Join(root, "Default")
+	old := filepath.Join(root, "Old")
+	target := movedData(t, old, def)
+	if err := os.Rename(old, old+"-away"); err != nil {
+		t.Fatal(err)
+	}
+	d := openChosen(t, def)
+	if d.dir != target || !strings.Contains(d.notice, "无法访问") || !strings.Contains(d.notice, old) {
+		t.Fatal(d.dir, d.notice)
+	}
+	if _, err := os.Stat(old); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatal("created the old place again:", err)
+	}
+	if loc, _ := readDataLocation(def); loc != (dataLocation{Dir: target}) {
+		t.Fatal("not committed:", loc)
+	}
+}
+
+// holdLock locks dir the way the instance that moved the data does until it
+// exits, and lets go after a while. stillThere reports whether the database
+// in dir was still there when it let go.
+func holdLock(t *testing.T, dir string) (stillThere func() bool) {
+	t.Helper()
+	unlock, err := acquireDataLock(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan bool, 1)
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		_, err := os.Stat(filepath.Join(dir, databaseName))
+		unlock()
+		done <- err == nil
+	}()
+	return func() bool { return <-done }
+}
+
+func TestOpenDataDirWaitsForTheInstanceThatMoved(t *testing.T) {
+	root := t.TempDir()
+	def := filepath.Join(root, "Default")
+	old := filepath.Join(root, "Old")
+	target := movedData(t, old, def)
+	stillThere := holdLock(t, old)
+	d := openChosen(t, def)
+	if !stillThere() {
+		t.Fatal("deleted the old files while the old instance held them")
+	}
+	if d.dir != target || strings.Contains(d.notice, "手动删除") {
+		t.Fatal(d.dir, d.notice)
+	}
+	if found := clipnestFilesIn(t, old); len(found) != 0 {
+		t.Fatal("old files left:", found)
+	}
+}
+
+func TestOpenDataDirWaitsToGoBack(t *testing.T) {
+	root := t.TempDir()
+	def := filepath.Join(root, "Default")
+	old := filepath.Join(root, "Old")
+	target := movedData(t, old, def)
+	if err := os.WriteFile(filepath.Join(target, databaseName), []byte("not a database"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	holdLock(t, old)
+	if d := openChosen(t, def); d.dir != old {
+		t.Fatal(d.dir)
+	}
+}
+
+// A copy on a disk that isn't connected can't be deleted. Going back with the
+// record unchanged would let the copy win once the disk is back, so Clipnest
+// asks instead.
+func TestOpenDataDirWontGoBackWithACopyItCantDelete(t *testing.T) {
+	root := t.TempDir()
+	def := filepath.Join(root, "Default")
+	old := filepath.Join(root, "Old")
+	target := movedData(t, old, def)
+	if err := os.Rename(target, target+"-away"); err != nil {
+		t.Fatal(err)
+	}
+	readOnly(t, def)
+	if _, err := openDataDir(chooseDataDir("", def), def); err == nil {
+		t.Fatal("went back with the record still naming the copy")
+	}
+}
+
+// The copy stays until the old place has opened.
+func TestOpenDataDirKeepsTheCopyWhenTheOldPlaceWontOpen(t *testing.T) {
+	root := t.TempDir()
+	def := filepath.Join(root, "Default")
+	old := filepath.Join(root, "Old")
+	target := movedData(t, old, def)
+	if err := os.WriteFile(filepath.Join(target, "privacy.json"), []byte("{"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(old, "privacy.json"), []byte("{"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := openDataDir(chooseDataDir("", def), def); err == nil {
+		t.Fatal("opened")
+	}
+	if found, _ := hasClipnestData(target); !found {
+		t.Fatal("deleted the copy")
 	}
 }

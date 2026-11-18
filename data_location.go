@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -125,21 +126,16 @@ func checkDataDir(dir string) error {
 	return nil
 }
 
-// clipnestDataFiles mark a directory as holding Clipnest data: the database,
-// or the JSON files from before it.
-var clipnestDataFiles = []string{databaseName, "history.json", "phrases.json"}
-
+// hasClipnestData reports whether dir has a Clipnest database. JSON files
+// from before SQLite don't count: names like phrases.json are common, and
+// data that isn't in SQLite can't move. Every directory Clipnest records has
+// a database.
 func hasClipnestData(dir string) (bool, error) {
-	for _, name := range clipnestDataFiles {
-		_, err := os.Lstat(filepath.Join(dir, name))
-		if err == nil {
-			return true, nil
-		}
-		if !errors.Is(err, fs.ErrNotExist) {
-			return false, err
-		}
+	_, err := os.Lstat(filepath.Join(dir, databaseName))
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
 	}
-	return false, nil
+	return err == nil, err
 }
 
 // pathKey compares paths the way the file system does by default: macOS and
@@ -158,4 +154,21 @@ func samePath(a, b string) bool { return pathKey(a) == pathKey(b) }
 func within(path, dir string) bool {
 	rel, err := filepath.Rel(pathKey(dir), pathKey(path))
 	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
+}
+
+// commitMove records a finished copy as the data directory.
+func commitMove(defaultDir string, loc dataLocation) error {
+	return keepPlaced(writeDataLocation(defaultDir, loc))
+}
+
+// keepPlaced lets a record stand that is in place but whose folder couldn't
+// be synced: the restart reads it, and the launch commits it again. Undoing
+// the move now would leave the record naming a copy.
+func keepPlaced(err error) error {
+	var placed *replacedWriteError
+	if errors.As(err, &placed) {
+		log.Print("位置记录已写入，但文件夹未能同步：", err)
+		return nil
+	}
+	return err
 }

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -264,5 +265,42 @@ func TestMoveToLeavesTheHistoryLockFree(t *testing.T) {
 	close(release)
 	if err := <-done; err != nil {
 		t.Fatal(err)
+	}
+}
+
+// A copy left after a failed commit isn't recorded, but picking its folder
+// later would offer it as data, so the error says where it is.
+func TestMoveToReportsACopyItCouldNotRemove(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission bits don't make a folder read-only on Windows")
+	}
+	s, old := movableStorage(t)
+	target := filepath.Join(filepath.Dir(old), "New")
+	err := s.MoveTo(target, func() error {
+		readOnly(t, target)
+		return errors.New("injected")
+	})
+	if err == nil || !strings.Contains(err.Error(), "手动删除") || !strings.Contains(err.Error(), target) {
+		t.Fatal(err)
+	}
+	stillWorks(t, s)
+}
+
+// A record whose folder couldn't be synced is in place: the restart reads it.
+func TestCommitMoveKeepsARecordInPlace(t *testing.T) {
+	if err := keepPlaced(&replacedWriteError{errors.New("sync")}); err != nil {
+		t.Fatal(err)
+	}
+	failure := errors.New("disk full")
+	if err := keepPlaced(failure); err != failure {
+		t.Fatal(err)
+	}
+	def := t.TempDir()
+	loc := dataLocation{Dir: filepath.Join(def, "New"), Previous: def}
+	if err := commitMove(def, loc); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := readDataLocation(def); got != loc {
+		t.Fatal(got)
 	}
 }

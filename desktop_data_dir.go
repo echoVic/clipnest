@@ -59,7 +59,7 @@ func (d *Desktop) changeDataDir(t moveTarget) error {
 		return errors.New("正在处理其他操作，请稍后再试")
 	}
 	err := d.storage.MoveTo(t.dir, func() error {
-		return writeDataLocation(d.data.defaultDir, dataLocation{Dir: t.dir, Previous: d.data.dir})
+		return commitMove(d.data.defaultDir, dataLocation{Dir: t.dir, Previous: d.data.dir})
 	})
 	if err != nil {
 		mygo.RunOnMain(func() { d.busy = false })

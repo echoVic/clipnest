@@ -83,12 +83,18 @@ func (s *Storage) moveTo(target string, commit func() error, ops moveOps) error 
 		err = commit()
 	}
 	if err != nil {
+		var left []error
 		for _, path := range published {
-			os.Remove(path)
+			if rerr := os.Remove(path); rerr != nil && !errors.Is(rerr, fs.ErrNotExist) {
+				left = append(left, rerr)
+			}
 		}
 		unlock()
 		os.Remove(filepath.Join(target, ".writer.lock"))
 		removeCreated(target, created)
+		if len(left) > 0 {
+			return fmt.Errorf("移动失败，仍使用原位置：%w。复制到「%s」的文件没能删除，可以手动删除（%v）", err, target, errors.Join(left...))
+		}
 		return fmt.Errorf("移动失败，仍使用原位置：%w", err)
 	}
 	unlock()

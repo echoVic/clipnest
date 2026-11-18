@@ -3,6 +3,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -21,6 +22,9 @@ func acquireDataLock(dir string) (func(), error) {
 	}
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		f.Close()
+		if errors.Is(err, syscall.EWOULDBLOCK) {
+			err = errors.Join(errDataLocked, err)
+		}
 		return nil, fmt.Errorf("数据目录正被另一个 Clipnest 实例使用，已停止启动：%w", err)
 	}
 	return func() { _ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN); _ = f.Close() }, nil
