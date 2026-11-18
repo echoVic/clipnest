@@ -24,7 +24,7 @@ A keyboard-first clipboard history panel for macOS and Windows. Copy as usual an
 
 - Records plain text, links, code and PNG images; duplicates are merged and the most recent copy moves to the front. File lists are not recorded.
 - SQLite storage with no limit on the number of entries; history is trimmed by capacity (512 MiB by default) and by days kept. Snippets are stored separately, up to 500.
-- Search text, titles and source apps, filtered by text, link, code or image; on macOS, text recognized by the system Vision framework from screenshots is searchable too, on-device and never uploaded.
+- Search text, titles and source apps, filtered by text, link, code or image; text in screenshots is recognized on-device and becomes searchable too, never uploaded: by the Vision framework on macOS and by the built-in Windows OCR on Windows, which reads Chinese once Chinese (with Optical character recognition) is added in Windows language settings.
 - Exclude apps from recording; since macOS 15.4 Clipnest follows the system clipboard-recording permission and won't read in the background when the answer is Default or Denied.
 - Recognizes common keys and tokens (AWS, GitHub, GitLab, Slack, Stripe, Google, JWT, private keys and more) and card numbers copied on their own. By default they are recorded masked: the list, preview and search show only the start and end, Show reveals the original, and pasting still uses the original. You can also skip them or turn recognition off.
 - Ignore content by regular expression, such as `^\d{6}$` for one-time codes. When a password manager clears the clipboard within 5 minutes of a copy, the entry it left is deleted too (on by default).
