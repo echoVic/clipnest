@@ -29,7 +29,7 @@ const (
 	imageTextDisabled    ImageTextState = "disabled"
 	imageTextTooLarge    ImageTextState = "tooLarge"
 	imageTextNeedsSQLite ImageTextState = "needsSQLite"
-	imageTextUnsupported ImageTextState = "unsupported" // not macOS
+	imageTextUnsupported ImageTextState = "unsupported" // not macOS or Windows
 )
 
 // Recognized text lives outside history_content: SQLite rewrites a whole row
@@ -89,8 +89,13 @@ func imageTextCopy(image Entry) (Entry, error) {
 // result that cannot be saved does not run Vision on the same image every tick.
 const imageTextRetryTicks = 15
 
+// errImageTextUnavailable is a recognizer that cannot read any image yet, as
+// Windows without a recognition language. Images stay queued for it.
+var errImageTextUnavailable = errors.New("没有可用的文字识别")
+
 // recognizeImages drains the queue at start and on each tick until stop
-// closes. Recognition failures mark the image; only storage errors back off.
+// closes. Recognition failures mark the image; storage errors and a missing
+// recognizer back off.
 func (h *History) recognizeImages(recognize func([]byte) (string, error), tick <-chan time.Time, stop <-chan struct{}) {
 	wait := 0
 	for {
@@ -139,6 +144,9 @@ func (h *History) recognizePending(recognize func([]byte) (string, error), stop 
 		case <-stop:
 			return nil
 		default:
+		}
+		if errors.Is(recognizeErr, errImageTextUnavailable) {
+			return recognizeErr
 		}
 		if err := db.saveImageText(id, epoch, text, recognizeErr); err != nil {
 			return err

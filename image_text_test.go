@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"database/sql"
 	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -165,7 +165,7 @@ func searchTotal(t *testing.T, h *History, q string) int {
 }
 
 func imageTextPreviewState(state ImageTextState) ImageTextState {
-	if runtime.GOOS != "darwin" {
+	if !imageTextSupported {
 		return imageTextUnsupported
 	}
 	return state
@@ -173,7 +173,7 @@ func imageTextPreviewState(state ImageTextState) ImageTextState {
 
 func assertImageTextPreview(t *testing.T, e Entry, state ImageTextState, text, title string) {
 	t.Helper()
-	if runtime.GOOS != "darwin" {
+	if !imageTextSupported {
 		state, text, title = imageTextUnsupported, "", defaultImageTitle
 	}
 	if e.ImageTextState != state || e.ImageText != text || e.Title != title {
@@ -288,6 +288,28 @@ func TestImageTextStatesAndFailuresAreNotRetried(t *testing.T) {
 	assertImageTextPreview(t, e, imageTextFailed, "", defaultImageTitle)
 	if n := searchTotal(t, s.History, "partial"); n != 0 {
 		t.Fatal("failed recognition was indexed")
+	}
+}
+
+// Windows can have no recognizer for any language. Images stay queued until
+// one is installed instead of failing, and the worker backs off meanwhile.
+func TestImageTextWithoutRecognizerKeepsImagesQueued(t *testing.T) {
+	im := imageEntry(t, 22)
+	s := imageTextStorage(t, im)
+	calls := 0
+	err := s.History.recognizePending(func([]byte) (string, error) {
+		calls++
+		return "", fmt.Errorf("no languages: %w", errImageTextUnavailable)
+	}, nil)
+	if !errors.Is(err, errImageTextUnavailable) || calls != 1 {
+		t.Fatal("missing recognizer was not reported", err, calls)
+	}
+	if imageTextStates(t, s.History.db.db)[im.ID] != ocrPending {
+		t.Fatal("image left the queue without a recognizer")
+	}
+	recognizeAll(t, s.History, func([]byte) (string, error) { return "已安装", nil })
+	if n := searchTotal(t, s.History, "已安装"); n != 1 {
+		t.Fatal("image was not recognized once a recognizer was available", n)
 	}
 }
 
@@ -541,7 +563,7 @@ func TestImageTextCopyIsTheTextCaptureWouldSkip(t *testing.T) {
 	im := imageEntry(t, 80)
 	s := imageTextStorage(t, im)
 	recognizeAll(t, s.History, func([]byte) (string, error) { return "第一行\nsecond line", nil })
-	if runtime.GOOS != "darwin" {
+	if !imageTextSupported {
 		if _, err := imageTextCopy(detail(t, s.History, im.ID)); err == nil {
 			t.Fatal("unsupported platform exposed recognized text for copying")
 		}
