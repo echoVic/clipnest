@@ -19,6 +19,7 @@ A keyboard-first clipboard history panel for macOS and Windows. Copy as usual an
 - Switch to **Snippets** at the top: insertion works like history, **⌘N** creates, **⌘E** edits, **⌘⌫ / Delete** removes (with confirmation) and **⌥↑ / ⌥↓** reorder.
 - Auto-paste needs Accessibility permission on macOS; without it you can use Copy Only. Windows needs no permission.
 - If the shortcut is taken, Clipnest tries the next one (macOS **⌥⇧V**, Windows **Ctrl+Shift+V**), and you can pick another in Preferences → Shortcuts.
+- On Windows, turn on **Open Clipnest with Win+V** in Preferences → Shortcuts. Clipnest takes **Win+V** from the system clipboard panel and restarts Explorer, so the taskbar disappears for a few seconds. Emoji, GIFs and clipboard history from that panel then open with **Win+.**, and while Clipnest isn't running, Win+V does nothing. Turning the switch off or uninstalling Clipnest gives Win+V back to Windows.
 
 ## Features
 

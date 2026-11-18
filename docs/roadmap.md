@@ -10,7 +10,7 @@
 |---|---|---|---|---|
 | 1 | 开机自启（已完成） | macOS、Windows | 小 | 会加上 |
 | 2 | 按条数保留历史（已完成） | 全部 | 小 | 可以加上 |
-| 3 | Win+V 打开 Clipnest（可选） | Windows | 中小 | 打算做 |
+| 3 | Win+V 打开 Clipnest（已完成） | Windows | 中小 | 打算做 |
 | 4 | 透明图片在 Windows 上的两处缺口（已提 MyGo PR [#2032](https://github.com/egoist/mygo/pull/2032)） | Windows | 小 | 计划修 |
 | 5 | 往远程窗口粘贴前多等一会儿 | 全部 | 小 | 已问具体场景 |
 | 6 | 在设置里选择数据目录 | 全部 | 中 | 后面考虑 |
@@ -29,11 +29,13 @@
 - 三个条件同时生效，从最旧的开始清理，常用语始终保留。和现有策略一样，只支持 SQLite。
 
 ### 3. Win+V 打开 Clipnest
-- 现状：Win+V 被资源管理器占着，设成唤起快捷键会提示「被占用」。
-- 先验证：在注册表 `HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced` 的 `DisabledHotkeys` 里加上 `V`，重启资源管理器后，Clipnest 能否注册到 Win+V。在 Win10 和 Win11 上都要试。
-- 做法：偏好设置加开关，打开时写注册表、重启资源管理器、注册 Win+V；关闭和卸载时还原。写注册表时保留 `DisabledHotkeys` 里原有的其他字母。
-- 开关旁说明代价：系统 Win+V 面板里的表情、GIF、云剪贴板入口会失效，表情还能用 Win+. 打开。
+- 偏好设置 → 快捷键加开关「用 Win+V 打开 Clipnest」，只在 Windows 上显示。打开前弹窗说明要重启资源管理器。
+- 打开：在注册表 `HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced` 的 `DisabledHotkeys` 里加上 `V`（保留原有的其他字母），重启资源管理器，再注册 Win+V。资源管理器只在启动时读这个值。
+- 关闭和卸载：去掉 Clipnest 加的 `V`，再重启资源管理器，Win+V 回到系统。`V` 原本就在时只记下来，关闭时不动它，也不重启。状态记在 `HKCU\Software\Clipnest` 的 `WinVHotkey`，卸载程序不知道数据目录也能还原；卸载时安装包运行 `Clipnest.exe --restore-win-v`。
+- 重启用重启管理器（Restart Manager），只重启当前会话的资源管理器，和安装程序一样。新的资源管理器会继承发起重启的进程的环境变量，所以由一个带用户登录环境（`CreateEnvironmentBlock`）的 Clipnest 子进程（`--restart-explorer`）来发起，而不是 Clipnest 自己：它的环境可能比资源管理器的旧，卸载时还带着安装包的变量。
+- 代价写在开关旁：系统面板里的表情、GIF 和剪贴板历史改用 Win+. 打开（同一个面板）；Clipnest 未运行时 Win+V 没有反应。
 - 不用全局键盘钩子：侵入性大，还容易被安全软件当成键盘记录器。
+- 实测：Win11 25H2（26200）上打开、关闭、Clipnest 重开后注册 Win+V、`--restore-win-v` 都正常；任务栏和托盘图标会恢复，其他会话和单独进程里的文件夹窗口不受影响；从带着别的环境变量的终端启动 Clipnest，重启后的资源管理器里也只有用户自己的环境变量。Win10 没有测。
 
 ### 4. Windows 透明图片
 - 读：剪贴板上只有位图、没有 PNG 时，现在读的是 CF_DIB，透明会丢。改为优先读 CF_DIBV5。
