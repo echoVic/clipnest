@@ -23,6 +23,7 @@ func (*nativeBridge) Empty() bool                      { return false }
 func (*nativeBridge) ClipboardAccess() ClipboardAccess { return clipboardUnsupported }
 func (*nativeBridge) Accessible() bool                 { return false }
 func (*nativeBridge) autoPaste() bool                  { return false }
+func (*nativeBridge) launchedAtLogin() bool            { return false }
 func manualPasteHint() string                          { return "Ctrl+V" }
 func (*nativeBridge) ReadyToPaste(targetApp) bool      { return false }
 func (*nativeBridge) Application(string) (ExcludedApp, error) {

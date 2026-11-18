@@ -171,3 +171,40 @@ func TestNativeSuspendAnimationRestoresBehavior(t *testing.T) {
 		t.Fatal("no restore for a missing window")
 	}
 }
+
+// The open-application event that macOS sends a login item marks it, and
+// only that event counts as an opening at login.
+func TestNativeLoginLaunchEvent(t *testing.T) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	n, err := openNative()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer n.pool()()
+	code := func(s string) uintptr {
+		return uintptr(s[0])<<24 | uintptr(s[1])<<16 | uintptr(s[2])<<8 | uintptr(s[3])
+	}
+	event := func(id string, prop string) uintptr {
+		descriptor := n.getClass("NSAppleEventDescriptor")
+		ev := n.send(descriptor, "appleEventWithEventClass:eventID:targetDescriptor:returnID:transactionID:",
+			code("aevt"), code(id), 0, ^uintptr(0), 0)
+		if prop != "" {
+			n.send(ev, "setParamDescriptor:forKeyword:", n.send(descriptor, "descriptorWithEnumCode:", code(prop)), code("prdt"))
+		}
+		return ev
+	}
+	if !n.loginLaunchEvent(event("oapp", "lgit")) {
+		t.Fatal("login item launch not recognized")
+	}
+	for name, ev := range map[string]uintptr{
+		"no event":     0,
+		"plain launch": event("oapp", ""),
+		"other reason": event("oapp", "xxxx"),
+		"reopen":       event("rapp", "lgit"),
+	} {
+		if n.loginLaunchEvent(ev) {
+			t.Fatalf("%s read as a login item launch", name)
+		}
+	}
+}

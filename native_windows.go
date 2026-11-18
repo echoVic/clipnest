@@ -45,6 +45,9 @@ func (*nativeBridge) Accessible() bool { return true }
 func (*nativeBridge) autoPaste() bool { return true }
 func manualPasteHint() string         { return "Ctrl+V" }
 
+// The Run entry's argument tells an opening at login (WasOpenedAtLogin).
+func (*nativeBridge) launchedAtLogin() bool { return false }
+
 // Revision wraps GetClipboardSequenceNumber, which increments on every
 // clipboard ownership change. Enumerating formats is therefore only needed
 // after an actual copy.

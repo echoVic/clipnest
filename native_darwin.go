@@ -248,3 +248,28 @@ func (n *nativeBridge) postPaste() error {
 	n.post(0, up)
 	return nil
 }
+
+// Apple Event codes of the launch of a login item.
+const (
+	aeOpenApplication     = 'o'<<24 | 'a'<<16 | 'p'<<8 | 'p'
+	aePropData            = 'p'<<24 | 'r'<<16 | 'd'<<8 | 't'
+	aeLaunchedAsLogInItem = 'l'<<24 | 'g'<<16 | 'i'<<8 | 't'
+)
+
+// launchedAtLogin reports whether macOS opened Clipnest as a login item.
+// MyGo v0.9.0 looks for the launch event in applicationWillFinishLaunching:,
+// before AppKit delivers it, so WasOpenedAtLogin is false on macOS 13 and
+// later. Called from ready, which runs in applicationDidFinishLaunching:
+// while the launch event is current.
+func (n *nativeBridge) launchedAtLogin() bool {
+	defer n.pool()()
+	return n.loginLaunchEvent(n.send(n.send(n.getClass("NSAppleEventManager"), "sharedAppleEventManager"), "currentAppleEvent"))
+}
+
+func (n *nativeBridge) loginLaunchEvent(event uintptr) bool {
+	if event == 0 || uint32(n.send(event, "eventID")) != aeOpenApplication {
+		return false
+	}
+	prop := n.send(event, "paramDescriptorForKeyword:", aePropData)
+	return prop != 0 && uint32(n.send(prop, "enumCodeValue")) == aeLaunchedAsLogInItem
+}

@@ -45,7 +45,7 @@ func (d *Desktop) ready() {
 	d.registerShortcuts()
 	d.createTray()
 	// Started at login, Clipnest waits in the tray for the shortcut.
-	if !mygo.App.WasOpenedAtLogin() {
+	if !mygo.App.WasOpenedAtLogin() && !d.n.launchedAtLogin() {
 		d.win.OnReadyToShow(d.openPanel)
 	}
 	go d.monitor()
