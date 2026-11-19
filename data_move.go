@@ -135,8 +135,14 @@ func (s *Storage) publishCopy(db *sqliteStore, target string, ops moveOps) ([]st
 		return nil, fmt.Errorf("历史仍在读取，请稍后再试：%w", err)
 	}
 	want, err := countTables(conn)
+	copyPath := filepath.Join(stage, databaseName)
 	if err == nil {
-		_, err = conn.ExecContext(context.Background(), "VACUUM INTO ?", filepath.Join(stage, databaseName))
+		// VACUUM INTO writes into an empty file that already exists; left to
+		// create it, SQLite would let the umask decide who can read it.
+		err = writeSynced(copyPath, nil)
+	}
+	if err == nil {
+		_, err = conn.ExecContext(context.Background(), "VACUUM INTO ?", copyPath)
 	}
 	conn.Close()
 	if err != nil {

@@ -144,6 +144,45 @@ func TestMoveToCopiesEverything(t *testing.T) {
 	}
 }
 
+// The history holds passwords and keys, so the copy is private even in a
+// folder others can read, like one made with the picker's New Folder.
+func TestMoveToKeepsTheCopyPrivate(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix permissions")
+	}
+	s, old := movableStorage(t)
+	target := filepath.Join(filepath.Dir(old), "Shared")
+	if err := os.Mkdir(target, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MoveTo(target, func() error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	moved, err := openStorage(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer moved.Close()
+	if err := moved.History.Add(entry(t, "移动之后")); err != nil {
+		t.Fatal(err)
+	}
+	if err := moved.History.Save(); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{databaseName, databaseName + "-wal", databaseName + "-shm", "privacy.json", "shortcut.json"} {
+		info, err := os.Stat(filepath.Join(target, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if perm := info.Mode().Perm(); perm != 0600 {
+			t.Errorf("%s: %v, want 0600", name, perm)
+		}
+	}
+}
+
 func TestMoveToFailuresLeaveNoTrace(t *testing.T) {
 	failure := errors.New("injected")
 	cases := map[string]struct {
