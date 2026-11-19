@@ -137,3 +137,69 @@ func TestShortcutBindingUsesPhysicalPositionForGlobalRegistration(t *testing.T) 
 		t.Fatalf("wrong physical accelerator: %+v", binding)
 	}
 }
+
+// A summon shortcut is taken from every app, so the editing, typing and
+// window keys people press all day are refused.
+func TestCommonShortcutsAreRefused(t *testing.T) {
+	for _, c := range []struct {
+		goos             string
+		refused, allowed []string
+	}{
+		{"darwin",
+			[]string{"Command+V", "Command+Q", "Command+Tab", "Command+Space", "Command+,", "Command+Left", "Ctrl+Space", "Ctrl+A", "Ctrl+V", "Ctrl+F4", "Shift+K", "Shift+Enter", "Alt+Left", "Alt+Backspace", "Alt+Tab", "Alt+F4", "Command+Shift+Left", "Alt+Shift+Right", "Shift+Ctrl+Tab"},
+			[]string{"CmdOrCtrl+Shift+V", "Alt+Shift+V", "Alt+Space", "Alt+V", "Command+F5", "Shift+F2", "Command+Alt+Left", "Ctrl+Alt+Shift+Left", "Command+Ctrl+Space"}},
+		{"windows",
+			[]string{"Ctrl+V", "Ctrl+C", "Ctrl+Space", "Ctrl+Right", "Ctrl+F4", "Alt+F4", "Alt+Tab", "Alt+Enter", "Shift+Delete", "Shift+Insert", "Ctrl+Shift+Left", "Ctrl+Shift+End"},
+			[]string{"CmdOrCtrl+Alt+V", "CmdOrCtrl+Shift+V", winVAccelerator, "Alt+Space", "Alt+V", "Ctrl+F12", "Ctrl+Alt+Left", "Super+Shift+K"}},
+		{"linux",
+			[]string{"Ctrl+V", "Shift+A", "Alt+Tab"},
+			[]string{"Ctrl+Shift+V", "Alt+Shift+V", "Super+K"}},
+	} {
+		for _, accelerator := range c.refused {
+			_, err := parseShortcutBinding(c.goos, accelerator)
+			if !errors.As(err, new(commonShortcutError)) {
+				t.Errorf("%s: %s was not refused as common: %v", c.goos, accelerator, err)
+			}
+		}
+		for _, accelerator := range c.allowed {
+			if _, err := parseShortcutBinding(c.goos, accelerator); err != nil {
+				t.Errorf("%s: %s: %v", c.goos, accelerator, err)
+			}
+		}
+		for _, choice := range shortcutChoicesFor(c.goos) {
+			if _, err := parseShortcutBinding(c.goos, choice.accelerator); err != nil {
+				t.Errorf("%s: default %s: %v", c.goos, choice.accelerator, err)
+			}
+		}
+	}
+	_, err := parseShortcutBinding("windows", "Ctrl+V")
+	if err == nil || err.Error() != "Ctrl V 是常用快捷键，设成唤起快捷键后它在所有应用里都会失效，请再加一个修饰键" {
+		t.Fatal(err)
+	}
+}
+
+// Older versions let a common combination be saved. It no longer
+// registers, and the notice says why instead of calling the file unreadable.
+func TestShortcutConfigReplacesASavedCommonCombination(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "shortcut.json")
+	if err := saveShortcutConfig(path, "Ctrl+V"); err == nil {
+		t.Fatal("saved Ctrl+V")
+	}
+	if err := writePrivateJSON(path, shortcutConfig{Version: 1, Accelerator: "Ctrl+V"}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := loadShortcutConfig(path)
+	if got != "" || err == nil {
+		t.Fatalf("loaded %q %v", got, err)
+	}
+	label := "Ctrl V"
+	if runtime.GOOS == "darwin" {
+		label = "⌃ V"
+	}
+	if notice := shortcutConfigNotice(err); notice != "已保存的快捷键 "+label+" 会挡住常用操作，已改用默认快捷键；可在「偏好设置 → 快捷键」中修改" {
+		t.Fatal(notice)
+	}
+	if notice := shortcutConfigNotice(errors.New("快捷键配置无效")); notice != "快捷键配置无法读取，已尝试默认快捷键；可在「偏好设置 → 快捷键」中重新录入" {
+		t.Fatal(notice)
+	}
+}

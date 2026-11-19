@@ -101,7 +101,7 @@ func main() {
 		data: dataDirInfo{dir: dir, defaultDir: defaultDir, fixed: choice.fixed, notice: data.notice}}
 	if shortcutErr != nil {
 		log.Print("快捷键配置读取失败：", shortcutErr)
-		d.shortcutNotice = "快捷键配置无法读取，已尝试默认快捷键；可在「偏好设置 → 快捷键」中重新录入"
+		d.shortcutNotice = shortcutConfigNotice(shortcutErr)
 	}
 	mygo.Use(updater.New(updater.Options{Interval: 4 * time.Hour}))
 	mygo.SetFrontend(web)

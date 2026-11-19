@@ -163,6 +163,22 @@ func TestImportSkipsAnotherPlatformsShortcutAndApps(t *testing.T) {
 	}
 }
 
+// A file from an older version may hold a common combination like Ctrl+V:
+// everything else imports, and the shortcut stays as it is.
+func TestImportLeavesOutACommonShortcut(t *testing.T) {
+	from := transferStorage(t)
+	addEntries(t, from, entry(t, "导入的"))
+	path := withSettings(t, exportOf(t, from, false), func(s *exportSettings) { s.Shortcut = "Ctrl+V" })
+	to := transferStorage(t)
+	result, err := to.Import(path, true)
+	if err != nil || result.New != 1 || !result.Settings || result.Shortcut != "" {
+		t.Fatalf("%+v %v", result, err)
+	}
+	if len(result.Problems) != 1 || !strings.HasPrefix(result.Problems[0], "没有导入快捷键 ") || !strings.Contains(result.Problems[0], "常用快捷键") {
+		t.Fatal(result.Problems)
+	}
+}
+
 func TestImportFailureChangesNothing(t *testing.T) {
 	from := transferStorage(t)
 	addEntries(t, from, entry(t, "新的"))

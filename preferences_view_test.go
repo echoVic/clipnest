@@ -227,7 +227,9 @@ func TestPreferencesShortcutRecordingAndCancel(t *testing.T) {
 	}
 }
 
-func TestPreferencesShortcutCanRecordWindowCloseChordAndReset(t *testing.T) {
+// ⌘W would close windows in every app, so recording refuses it, says why
+// and waits for another chord, without closing settings.
+func TestPreferencesShortcutRefusesACommonChordAndResets(t *testing.T) {
 	v := settingsView()
 	v.tab = shortcutsTab
 	var saved string
@@ -237,8 +239,15 @@ func TestPreferencesShortcutCanRecordWindowCloseChordAndReset(t *testing.T) {
 	tt := ui.NewTester(v.draw, 620, 580)
 	tt.Click("修改唤起快捷键")
 	tt.Key(ui.Super, ui.KeyW)
-	if saved != "Command+W" || closed != 0 {
-		t.Fatalf("saved=%q closed=%d", saved, closed)
+	if saved != "" || closed != 0 || !v.recordingShortcut {
+		t.Fatalf("saved=%q closed=%d recording=%v", saved, closed, v.recordingShortcut)
+	}
+	if !tt.HasText("⌘ W 是常用快捷键，设成唤起快捷键后它在所有应用里都会失效，请再加一个修饰键") {
+		t.Fatal("no reason given", tt.Texts())
+	}
+	tt.Key(ui.Super|ui.Shift, ui.KeyW)
+	if saved != "Command+Shift+W" || v.recordingShortcut {
+		t.Fatalf("saved=%q", saved)
 	}
 	tt.Click("恢复默认")
 	if saved != shortcutChoicesFor("darwin")[0].accelerator {

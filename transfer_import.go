@@ -306,7 +306,9 @@ func (s *exportSettings) check() error {
 		return nil
 	}
 	if s.Shortcut != "" {
-		if _, err := parseShortcutBinding(runtime.GOOS, s.Shortcut); err != nil {
+		// A common combination an older version saved is left out on
+		// import, not a damaged file.
+		if _, err := parseShortcutBinding(runtime.GOOS, s.Shortcut); err != nil && !errors.As(err, new(commonShortcutError)) {
 			return err
 		}
 	}

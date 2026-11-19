@@ -345,6 +345,10 @@ func (v *preferencesView) shortcutInput(ev ui.InputEvent) bool {
 			}
 			return true
 		}
+		if _, err := parseShortcutBinding(v.state.Platform, binding.Accelerator); err != nil {
+			v.notice, v.failed = err.Error(), true
+			return true
+		}
 		v.submitShortcut(binding.Accelerator)
 		return true
 	case ui.InputKeyUp, ui.InputText, ui.InputCompose, ui.InputCommand:

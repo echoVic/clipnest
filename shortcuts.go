@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"math/bits"
 	"os"
 	"runtime"
 	"strings"
@@ -168,11 +169,60 @@ func parseShortcutBinding(goos, accelerator string) (shortcutBinding, error) {
 	for key, candidate := range shortcutKeyNames {
 		if strings.EqualFold(name, candidate) {
 			if binding, ok := shortcutBindingFromEvent(goos, mods, key, ui.KeyUnknown); ok {
+				if commonShortcut(goos, mods, key) {
+					return shortcutBinding{}, commonShortcutError{binding.Label}
+				}
 				return binding, nil
 			}
 		}
 	}
 	return shortcutBinding{}, errors.New("请使用修饰键加字母、数字、功能键或导航键")
+}
+
+// commonShortcutError refuses a combination other apps rely on: as the
+// summon shortcut it would stop working everywhere.
+type commonShortcutError struct{ label string }
+
+func (e commonShortcutError) Error() string {
+	return e.label + " 是常用快捷键，设成唤起快捷键后它在所有应用里都会失效，请再加一个修饰键"
+}
+
+// commonShortcut reports whether mods+key is pressed all day for typing,
+// copy and paste, moving and selecting text, or switching tabs, apps and
+// input sources. Clipnest itself pastes by sending ⌘V or Ctrl+V, which
+// would open the panel again instead of pasting. Win alone isn't limited:
+// Windows already holds the combinations it uses.
+func commonShortcut(goos string, mods ui.Modifiers, key ui.Key) bool {
+	switch {
+	case key == ui.KeyF4 && (mods == ui.Ctrl || mods == ui.Alt):
+		return true // closes the tab or the window
+	case mods == ui.Shift || mods == ui.Ctrl || mods == ui.Super && goos == "darwin":
+		return !functionKeys[key]
+	case mods == ui.Alt:
+		// Alt with a letter, digit or Space is left to the person: launchers
+		// use ⌥Space, and the rest at most opens a menu or types a symbol.
+		return selectionKeys[key] || editingKeys[key]
+	case mods&ui.Shift != 0 && bits.OnesCount8(uint8(mods)) == 2:
+		return selectionKeys[key]
+	}
+	return false
+}
+
+var functionKeys = map[ui.Key]bool{ui.KeyF1: true, ui.KeyF2: true, ui.KeyF3: true, ui.KeyF4: true, ui.KeyF5: true, ui.KeyF6: true, ui.KeyF7: true, ui.KeyF8: true, ui.KeyF9: true, ui.KeyF10: true, ui.KeyF11: true, ui.KeyF12: true}
+
+// selectionKeys move through text and tabs; with Shift they select.
+var selectionKeys = map[ui.Key]bool{ui.KeyUp: true, ui.KeyDown: true, ui.KeyLeft: true, ui.KeyRight: true, ui.KeyHome: true, ui.KeyEnd: true, ui.KeyPageUp: true, ui.KeyPageDown: true, ui.KeyTab: true}
+
+var editingKeys = map[ui.Key]bool{ui.KeyEnter: true, ui.KeyEscape: true, ui.KeyBackspace: true, ui.KeyDelete: true, ui.KeyInsert: true}
+
+// shortcutConfigNotice is what startup says when the saved shortcut can't
+// be used and the defaults are tried instead.
+func shortcutConfigNotice(err error) string {
+	var common commonShortcutError
+	if errors.As(err, &common) {
+		return "已保存的快捷键 " + common.label + " 会挡住常用操作，已改用默认快捷键；可在「偏好设置 → 快捷键」中修改"
+	}
+	return "快捷键配置无法读取，已尝试默认快捷键；可在「偏好设置 → 快捷键」中重新录入"
 }
 
 type shortcutOps struct {

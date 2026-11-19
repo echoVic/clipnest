@@ -20,7 +20,7 @@ type ImportResult struct {
 	// its summon shortcut for the desktop to register, "" for none.
 	Settings bool
 	Shortcut string
-	// Problems are the settings that couldn't be saved after the commit.
+	// Problems are the settings left out or not saved after the commit.
 	Problems []string
 }
 
@@ -161,7 +161,12 @@ func (s *Storage) importFile(path string, withSettings bool, beforeCommit func()
 		if err := s.Exclusions.Replace(settings.ExcludedApps); err != nil {
 			result.Problems = append(result.Problems, "排除的应用没能保存："+err.Error())
 		}
-		result.Shortcut = settings.Shortcut
+		var common commonShortcutError
+		if _, err := parseShortcutBinding(runtime.GOOS, settings.Shortcut); errors.As(err, &common) {
+			result.Problems = append(result.Problems, "没有导入快捷键 "+common.label+"：它是常用快捷键，设成唤起快捷键后会在所有应用里失效")
+		} else {
+			result.Shortcut = settings.Shortcut
+		}
 	}
 	return result, nil
 }

@@ -254,14 +254,16 @@ func TestImportSettingsFile(t *testing.T) {
 		change func(*exportSettings)
 		ok     bool
 	}{
-		"fine":           {func(*exportSettings) {}, true},
-		"retention":      {func(s *exportSettings) { s.Retention.KeepDays = -1 }, false},
-		"privacy":        {func(s *exportSettings) { s.Privacy.Ignore = []string{"("} }, false},
-		"secrets mode":   {func(s *exportSettings) { s.Privacy.Secrets = "" }, false},
-		"no platform":    {func(s *exportSettings) { s.Platform = "" }, false},
-		"shortcut":       {func(s *exportSettings) { s.Shortcut = "Hyper+V" }, false},
-		"no shortcut":    {func(s *exportSettings) { s.Shortcut = "" }, true},
-		"duplicate apps": {func(s *exportSettings) { s.ExcludedApps = append(s.ExcludedApps, s.ExcludedApps[0]) }, false},
+		"fine":         {func(*exportSettings) {}, true},
+		"retention":    {func(s *exportSettings) { s.Retention.KeepDays = -1 }, false},
+		"privacy":      {func(s *exportSettings) { s.Privacy.Ignore = []string{"("} }, false},
+		"secrets mode": {func(s *exportSettings) { s.Privacy.Secrets = "" }, false},
+		"no platform":  {func(s *exportSettings) { s.Platform = "" }, false},
+		"shortcut":     {func(s *exportSettings) { s.Shortcut = "Hyper+V" }, false},
+		"no shortcut":  {func(s *exportSettings) { s.Shortcut = "" }, true},
+		// Left out on import, not a damaged file.
+		"common shortcut": {func(s *exportSettings) { s.Shortcut = "Ctrl+V" }, true},
+		"duplicate apps":  {func(s *exportSettings) { s.ExcludedApps = append(s.ExcludedApps, s.ExcludedApps[0]) }, false},
 		"another platform's shortcut and apps": {func(s *exportSettings) {
 			s.Platform, s.Shortcut = "plan9", "Hyper+V"
 			s.ExcludedApps = append(s.ExcludedApps, s.ExcludedApps[0])
