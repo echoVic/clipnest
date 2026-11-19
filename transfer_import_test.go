@@ -224,10 +224,11 @@ func TestImportPhrasesFile(t *testing.T) {
 		phrases string
 		ok      bool
 	}{
-		"fine":      {`{"phrases":["一","二"]}`, true},
-		"too many":  {many, false},
-		"broken":    {`{"phrases":[`, false},
-		"bad UTF-8": {"{\"phrases\":[\"\xff\"]}", false},
+		"fine":         {`{"phrases":["一","二"]}`, true},
+		"too many":     {many, false},
+		"broken":       {`{"phrases":[`, false},
+		"far too many": {`{"phrases":[` + strings.Repeat(`"x",`, 100000) + `"x"]}`, false},
+		"bad UTF-8":    {"{\"phrases\":[\"\xff\"]}", false},
 	} {
 		t.Run(name, func(t *testing.T) {
 			path := testZip(t, [2]string{manifestName, manifestJSON(1)}, [2]string{historyName, "[]"}, [2]string{phrasesName, c.phrases})

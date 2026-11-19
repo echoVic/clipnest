@@ -215,19 +215,53 @@ func (f *importFile) entry(item exportItem, now int64) (Entry, error) {
 	return e, nil
 }
 
+// boundedPhrases decodes the phrase array element by element and stops at
+// the first one past maxPhrases, so a file of tiny phrases can't allocate
+// more than the cap.
+type boundedPhrases []string
+
+var errTooManyPhrases = errors.New("常用语超过 500 条")
+
+func (p *boundedPhrases) UnmarshalJSON(data []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	if tok, err := dec.Token(); err != nil {
+		return err
+	} else if tok == nil {
+		return nil // null is an empty list
+	} else if tok != json.Delim('[') {
+		return errors.New("常用语不是数组")
+	}
+	list := []string{}
+	for dec.More() {
+		if len(list) == maxPhrases {
+			return errTooManyPhrases
+		}
+		var s string
+		if err := dec.Decode(&s); err != nil {
+			return err
+		}
+		list = append(list, s)
+	}
+	if _, err := dec.Token(); err != nil {
+		return err
+	}
+	*p = list
+	return nil
+}
+
 // phrases reads the file's phrase texts. Each text is checked when it is
-// added; more than maxPhrases make the file damaged.
+// added; more than maxPhrases make the file damaged, without decoding the
+// rest.
 func (f *importFile) phrases() ([]string, error) {
 	data, err := readZipFile(f.files[phrasesName], maxPhrasesBytes)
-	var p exportPhrases
+	var p struct {
+		Phrases boundedPhrases `json:"phrases"`
+	}
 	if err == nil {
 		err = decodeExportJSON(data, &p)
 	}
 	if err != nil {
 		return nil, damaged("phrases.json：" + err.Error())
-	}
-	if len(p.Phrases) > maxPhrases {
-		return nil, damaged("常用语超过 500 条")
 	}
 	return p.Phrases, nil
 }
