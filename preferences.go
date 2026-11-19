@@ -75,21 +75,31 @@ func (d *Desktop) SetAppearance(source mygo.ThemeSource) error {
 // Called by the native preferences worker: keep registration and Desktop
 // fields on main, and the atomic settings write off the UI thread.
 func (d *Desktop) setShortcut(accelerator string) error {
-	binding, err := parseShortcutBinding(runtime.GOOS, accelerator)
-	if err != nil {
+	if _, err := parseShortcutBinding(runtime.GOOS, accelerator); err != nil {
 		return err
 	}
-	var previous string
 	started := false
 	mygo.RunOnMain(func() {
 		if !d.busy && !d.quitting {
 			d.busy, started = true, true
-			previous = d.shortcutAccelerator
 		}
 	})
 	if !started {
 		return errors.New("正在处理其他操作，请稍后再试")
 	}
+	defer mygo.RunOnMain(func() { d.busy = false })
+	return d.applyShortcut(accelerator)
+}
+
+// applyShortcut registers accelerator as the summon shortcut and saves it.
+// The caller holds d.busy.
+func (d *Desktop) applyShortcut(accelerator string) error {
+	binding, err := parseShortcutBinding(runtime.GOOS, accelerator)
+	if err != nil {
+		return err
+	}
+	var previous string
+	mygo.RunOnMain(func() { previous = d.shortcutAccelerator })
 	committed, err := replaceShortcut(previous, binding.Accelerator, d.shortcutPath, d.shortcutPressed, shortcutOps{
 		register: func(acc string, show func()) (err error) {
 			mygo.RunOnMain(func() { err = mygo.GlobalShortcut.Register(acc, show) })
@@ -98,24 +108,24 @@ func (d *Desktop) setShortcut(accelerator string) error {
 		unregister: func(acc string) { mygo.RunOnMain(func() { mygo.GlobalShortcut.Unregister(acc) }) },
 		save:       saveShortcutConfig,
 	})
+	if !committed {
+		return err
+	}
 	mygo.RunOnMain(func() {
-		d.busy = false
-		if committed {
-			if d.notice == d.shortcutNotice {
-				d.notice = ""
-			}
-			d.shortcut, d.shortcutAccelerator = binding.Label, binding.Accelerator
-			d.shortcutNotice = ""
-			if err != nil {
-				d.shortcutNotice = err.Error()
-			}
-			// Win+V was the summon shortcut; the switch keeps it.
-			if previous == winVAccelerator {
-				d.registerWinV()
-			}
-			if d.win != nil && d.win.IsVisible() {
-				_ = panelChanged.Broadcast(d.snapshot())
-			}
+		if d.notice == d.shortcutNotice {
+			d.notice = ""
+		}
+		d.shortcut, d.shortcutAccelerator = binding.Label, binding.Accelerator
+		d.shortcutNotice = ""
+		if err != nil {
+			d.shortcutNotice = err.Error()
+		}
+		// Win+V was the summon shortcut; the switch keeps it.
+		if previous == winVAccelerator {
+			d.registerWinV()
+		}
+		if d.win != nil && d.win.IsVisible() {
+			_ = panelChanged.Broadcast(d.snapshot())
 		}
 	})
 	return err
