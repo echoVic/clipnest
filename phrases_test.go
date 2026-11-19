@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func phraseTexts(t *testing.T, p *Phrases) []string {
+func storedPhraseTexts(t *testing.T, p *Phrases) []string {
 	t.Helper()
 	list, err := p.List("")
 	if err != nil {
@@ -28,7 +28,7 @@ func phraseTexts(t *testing.T, p *Phrases) []string {
 func TestPhrasesPersistInUserOrder(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "private", "phrases.json")
 	p := openPhrases(path)
-	if got := phraseTexts(t, p); len(got) != 0 {
+	if got := storedPhraseTexts(t, p); len(got) != 0 {
 		t.Fatal("missing file must start empty")
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
@@ -52,7 +52,7 @@ func TestPhrasesPersistInUserOrder(t *testing.T) {
 	if err := p.Delete(a.ID); err != nil {
 		t.Fatal(err)
 	}
-	got := phraseTexts(t, openPhrases(path))
+	got := storedPhraseTexts(t, openPhrases(path))
 	if len(got) != 2 || got[0] != "third" || got[1] != "  Simple prose.\n" {
 		t.Fatalf("order or exact text lost: %q", got)
 	}
@@ -79,7 +79,7 @@ func TestPhraseMoveStopsAtEnds(t *testing.T) {
 	if err := p.Move(a.ID, 2); err == nil {
 		t.Fatal("only single steps are allowed")
 	}
-	if got := strings.Join(phraseTexts(t, p), ""); got != "ab" {
+	if got := strings.Join(storedPhraseTexts(t, p), ""); got != "ab" {
 		t.Fatalf("order changed: %q", got)
 	}
 }
@@ -153,7 +153,7 @@ func TestFailedWriteKeepsPhrasesUnchanged(t *testing.T) {
 	if err := p.Delete(a.ID); err == nil {
 		t.Fatal("delete failure not reported")
 	}
-	if got := phraseTexts(t, p); len(got) != 1 || got[0] != "kept" {
+	if got := storedPhraseTexts(t, p); len(got) != 1 || got[0] != "kept" {
 		t.Fatalf("memory changed after a failed write: %q", got)
 	}
 }

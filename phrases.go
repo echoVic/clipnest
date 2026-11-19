@@ -224,3 +224,21 @@ func (p *Phrases) newID() string {
 		}
 	}
 }
+
+// texts lists the phrase texts in order.
+func (p *Phrases) texts() ([]string, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.broken != nil {
+		return nil, p.broken
+	}
+	return phraseTexts(p.items), nil
+}
+
+func phraseTexts(items []Phrase) []string {
+	texts := make([]string, len(items))
+	for i, x := range items {
+		texts[i] = x.Text
+	}
+	return texts
+}

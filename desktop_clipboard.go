@@ -263,20 +263,10 @@ func (d *Desktop) captureFrom(c clipboardReader, request bool) (bool, error) {
 // applyPrivacy applies the ignore rules and the secret setting to a text copy,
 // masking it in place. It reports whether the copy is still recorded.
 func (d *Desktop) applyPrivacy(e *Entry) bool {
-	if e.Kind == "image" || d.storage == nil {
+	if d.storage == nil {
 		return true
 	}
-	privacy := d.storage.Privacy
-	if privacy.Ignored(e.Text) {
-		return false
-	}
-	switch privacy.Settings().Secrets {
-	case secretsSkip:
-		return len(findSecrets(e.Text)) == 0
-	case secretsMask:
-		e.mask()
-	}
-	return true
+	return d.storage.Privacy.apply(e)
 }
 
 // Password managers clear the clipboard a while after a copy.

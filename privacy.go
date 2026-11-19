@@ -161,3 +161,22 @@ func (p *privacyStore) Ignored(text string) bool {
 	defer p.mu.RUnlock()
 	return slices.ContainsFunc(p.rules, func(re *regexp.Regexp) bool { return re.MatchString(text) })
 }
+
+// apply applies the ignore rules and the secret setting to a text entry the
+// way capture does, masking it in place. It reports whether the entry is
+// recorded.
+func (p *privacyStore) apply(e *Entry) bool {
+	if e.Kind == "image" {
+		return true
+	}
+	if p.Ignored(e.Text) {
+		return false
+	}
+	switch p.Settings().Secrets {
+	case secretsSkip:
+		return len(findSecrets(e.Text)) == 0
+	case secretsMask:
+		e.mask()
+	}
+	return true
+}

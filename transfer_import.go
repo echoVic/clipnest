@@ -308,3 +308,28 @@ func (s *exportSettings) check() error {
 	_, err := checkExcludedApps(s.ExcludedApps)
 	return err
 }
+
+type itemOutcome int
+
+const (
+	itemKept itemOutcome = iota
+	itemInvalid
+	itemSkipped // by this computer's privacy settings
+)
+
+// importedEntry builds the entry an item imports as: checked the way a copy
+// is, then judged and masked by this computer's privacy settings the way
+// capture judges a copy.
+func (f *importFile) importedEntry(item exportItem, ok bool, now int64, privacy *privacyStore) (Entry, itemOutcome) {
+	if !ok {
+		return Entry{}, itemInvalid
+	}
+	e, err := f.entry(item, now)
+	if err != nil {
+		return Entry{}, itemInvalid
+	}
+	if !privacy.apply(&e) {
+		return Entry{}, itemSkipped
+	}
+	return e, itemKept
+}

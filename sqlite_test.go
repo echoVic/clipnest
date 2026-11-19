@@ -255,7 +255,7 @@ func TestSQLiteIncrementalWritesAndRollback(t *testing.T) {
 	if _, err := s.Phrases.Save("", "rejected"); err == nil {
 		t.Fatal("injected write failure hidden")
 	}
-	if got := phraseTexts(t, s.Phrases); !reflect.DeepEqual(got, []string{"kept"}) {
+	if got := storedPhraseTexts(t, s.Phrases); !reflect.DeepEqual(got, []string{"kept"}) {
 		t.Fatal("failed phrase commit changed memory", got)
 	}
 	disk, ps, err := s.History.db.load()
