@@ -30,6 +30,8 @@ type preferencesActions struct {
 	pickDataDir       func()
 	restoreDataDir    func()
 	moveData          func(moveTarget)
+	exportData        func()
+	importData        func()
 	update            func()
 	close             func()
 }
@@ -473,6 +475,7 @@ func (v *preferencesView) storage(c *ui.Context) {
 			}
 		})
 	})
+	v.transfer(c)
 	v.group(c, "清理历史", func() {
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(16).Children(func() {
 			ui.Text(c, "仅清空复制历史，不删除常用语。").Grow(1).FontSize(12).TextColor(c.Theme().TextMuted)

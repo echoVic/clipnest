@@ -239,6 +239,8 @@ func newPreferencesWindow(d *Desktop) *preferencesWindow {
 		pickDataDir:    p.pickDataDir,
 		restoreDataDir: func() { go p.chooseDataDir(d.data.defaultDir) },
 		moveData:       p.moveData,
+		exportData:     p.exportData,
+		importData:     p.importData,
 		update:         d.CheckForUpdates,
 		close: func() {
 			if !v.busy {
@@ -275,13 +277,20 @@ func newPreferencesWindow(d *Desktop) *preferencesWindow {
 
 // All view state changes are on main. Only persistence work runs in a worker.
 func (p *preferencesWindow) run(work func() error, success string, resetRetention bool) {
+	p.report("", func() (string, error) { return success, work() }, resetRetention)
+}
+
+// report runs work in a worker, showing progress meanwhile and then what
+// work says it did. Work that returns "" and no error says nothing, as a
+// canceled dialog.
+func (p *preferencesWindow) report(progress string, work func() (string, error), resetRetention bool) {
 	if p.view.busy || p.desktop.busy || p.desktop.quitting {
 		return
 	}
-	p.view.busy, p.view.notice = true, ""
+	p.view.busy, p.view.notice, p.view.failed = true, progress, false
 	p.win.Invalidate()
 	go func() {
-		err := work()
+		success, err := work()
 		p.win.Update(func() {
 			p.view.busy = false
 			p.view.failed = err != nil && !errors.Is(err, errPermissionCanceled)
