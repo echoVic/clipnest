@@ -37,6 +37,7 @@ A keyboard-first clipboard history panel for macOS and Windows. Copy as usual an
 ## Privacy and data
 
 - Nothing is uploaded or analyzed online. Data lives in `~/Library/Application Support/Clipnest/clipnest.sqlite3` on macOS and `%AppData%\Clipnest\clipnest.sqlite3` on Windows by default. Preferences → Storage → Data location moves it to another folder or disk: Clipnest copies and checks the data, restarts, and deletes the old copy once the new place has opened. When that disk isn't connected, Clipnest asks at startup instead of starting new data elsewhere.
+- Preferences → Storage → Import and export saves the history, phrases and settings to one ZIP, which another computer (macOS or Windows) can import, merging by content. The file isn't encrypted; history with passwords or keys stays out unless you tick the box. An import judges entries by that computer's privacy settings, and replaces the settings only when you tick the box.
 - New installs use SQLite (file mode 0600) and are not encrypted; pause recording or clear history when needed.
 - Text is capped at 512 KiB per entry, images at 8 MiB and 16,000 pixels on the longest side; larger copies are skipped.
 - Clipboards marked as sensitive are ignored (macOS `ConcealedType` and friends, Windows `ExcludeClipboardContentFromMonitorProcessing`). Unmarked content can only be recognized by format: masking affects what is shown and searched, while the database keeps the original. Use ignore rules for formats Clipnest doesn't recognize. Settings are stored in `privacy.json` in the data directory.
