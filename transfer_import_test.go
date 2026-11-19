@@ -276,3 +276,36 @@ func TestImportSettingsFile(t *testing.T) {
 		})
 	}
 }
+
+func TestImportClearsAnInvalidSource(t *testing.T) {
+	history := "[{\"text\":\"好\",\"source\":\"a\xffb\",\"created\":5},{\"text\":\"坏\xff\",\"source\":\"\",\"created\":6}]"
+	path := importOf(t, history)
+	s := transferStorage(t)
+	plan, err := s.PlanImport(path)
+	if err != nil || plan.New != 1 || plan.Invalid != 1 {
+		t.Fatal(plan, err)
+	}
+	result, err := s.Import(path, false)
+	if err != nil || result.New != 1 || result.Invalid != 1 {
+		t.Fatal(result, err)
+	}
+	entries, _ := storedSnapshot(t, s.History)
+	if len(entries) != 1 || entries[0].Text != "好" || entries[0].Source != "" {
+		t.Fatalf("%+v", entries)
+	}
+}
+
+func TestImportMissingFile(t *testing.T) {
+	_, err := openImportFile(filepath.Join(t.TempDir(), "gone.zip"))
+	if err == nil || err.Error() != "导入文件不见了，可能已被移动或删除" {
+		t.Fatal(err)
+	}
+}
+
+func TestImportTooLargeNamesTheFileOnce(t *testing.T) {
+	big := strings.Repeat(" ", maxSettingsBytes+1)
+	f := openImport(t, importOf(t, "[]", [2]string{settingsName, big}))
+	if _, err := f.settings(); err == nil || err.Error() != "导入文件已损坏：settings.json：超过大小上限" {
+		t.Fatal(err)
+	}
+}

@@ -5,8 +5,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
+	"io/fs"
 	"runtime"
 	"unicode/utf8"
 )
@@ -26,7 +26,12 @@ func openImportFile(path string) (*importFile, error) {
 	if errors.Is(err, zip.ErrInsecurePath) {
 		err = nil // nothing is extracted, and such names are never read
 	}
-	if err != nil {
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return nil, errors.New("导入文件不见了，可能已被移动或删除")
+	case errors.Is(err, fs.ErrPermission):
+		return nil, errors.New("没有权限读取导入文件")
+	case err != nil:
 		return nil, errNotExport
 	}
 	f := &importFile{zr: zr, files: map[string]*zip.File{}}
@@ -91,7 +96,7 @@ func readZipFile(zf *zip.File, limit int64) ([]byte, error) {
 		return nil, err
 	}
 	if int64(len(data)) > limit {
-		return nil, fmt.Errorf("%s %w", zf.Name, errTooLarge)
+		return nil, errTooLarge
 	}
 	return data, nil
 }
@@ -102,15 +107,7 @@ func decodeExportJSON(data []byte, v any) error {
 	if !utf8.Valid(data) {
 		return errors.New("包含无效的 UTF-8")
 	}
-	dec := json.NewDecoder(bytes.NewReader(data))
-	if err := dec.Decode(v); err != nil {
-		return err
-	}
-	var extra json.RawMessage
-	if err := dec.Decode(&extra); err != io.EOF {
-		return errors.New("末尾有多余的内容")
-	}
-	return nil
+	return json.Unmarshal(data, v)
 }
 
 var errItemTooLarge = errors.New("单条历史超过 4 MB")
@@ -166,7 +163,15 @@ func (f *importFile) eachItem(fn func(item exportItem, ok bool) error) error {
 			return bad(err)
 		}
 		var item exportItem
-		ok := utf8.Valid(raw) && json.Unmarshal(raw, &item) == nil
+		ok := json.Unmarshal(raw, &item) == nil
+		if ok && !utf8.Valid(raw) {
+			// Invalid UTF-8 makes the item invalid, except in its source,
+			// which is cleared. Unmarshal replaced the bad bytes, so look
+			// at the raw text and image.
+			var fields struct{ Text, Image json.RawMessage }
+			ok = json.Unmarshal(raw, &fields) == nil && utf8.Valid(fields.Text) && utf8.Valid(fields.Image)
+			item.Source = ""
+		}
 		if err := fn(item, ok); err != nil {
 			return err
 		}

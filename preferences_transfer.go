@@ -185,6 +185,10 @@ func (p *preferencesWindow) importData() {
 		if err != nil {
 			return "", err
 		}
+		if result.Settings {
+			// The imported retention policy replaces unsaved edits to it.
+			p.win.Update(func() { p.view.retentionDirty = false })
+		}
 		return importNotice(result), nil
 	}, false)
 }

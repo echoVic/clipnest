@@ -1,7 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
+	"math/rand/v2"
+	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
@@ -225,5 +230,108 @@ func TestImportCleanupMatchesThePlan(t *testing.T) {
 		if !imported && lost != plan.PrunedNew {
 			t.Fatalf("settings %v: %d of the file's entries gone, plan said %d", imported, lost, plan.PrunedNew)
 		}
+	}
+}
+
+func TestImportShrinksTheWAL(t *testing.T) {
+	var items []string
+	for i := range 20 {
+		items = append(items, fmt.Sprintf(`{"text":"%d %s","source":"","created":%d}`, i, strings.Repeat("x", 300<<10), 1000+i))
+	}
+	path := importOf(t, "["+strings.Join(items, ",")+"]")
+	to := transferStorage(t)
+	result, err := to.Import(path, false)
+	if err != nil || result.New != 20 {
+		t.Fatal(result, err)
+	}
+	info, err := os.Stat(filepath.Join(to.dir, databaseName+"-wal"))
+	if err == nil && info.Size() > 1<<20 {
+		t.Fatalf("the WAL is %d bytes after an import", info.Size())
+	}
+}
+
+func TestPlanImportAgreesWithImport(t *testing.T) {
+	policies := []RetentionPolicy{{}, {KeepDays: 3}, {MaxEntries: 12}, {MaxMiB: 1}, {KeepDays: 5, MaxEntries: 20, MaxMiB: 1}}
+	for seed := uint64(1); seed <= 20; seed++ {
+		t.Run(fmt.Sprint(seed), func(t *testing.T) {
+			r := rand.New(rand.NewPCG(seed, seed*7919))
+			now := time.Now()
+			ago := func() int64 { return now.Add(-time.Duration(r.IntN(8*24)) * time.Hour).UnixMilli() }
+			text := func(label string) string {
+				if r.IntN(6) == 0 {
+					return label + strings.Repeat("y", 200_000+r.IntN(100_000))
+				}
+				return label + strings.Repeat("z", r.IntN(50))
+			}
+			to := transferStorage(t)
+			var existing []Entry
+			for i := range 10 {
+				e := textEntry(t, text(fmt.Sprintf("old%d ", i)), "旧", ago())
+				existing = append(existing, e)
+				addEntries(t, to, e)
+			}
+			var items []string
+			var fileTexts []string
+			add := func(text, source string, created int64) {
+				b, _ := json.Marshal(exportItem{Text: text, Source: source, Created: created})
+				items = append(items, string(b))
+				fileTexts = append(fileTexts, text)
+			}
+			for i := range 25 {
+				switch r.IntN(7) {
+				case 0: // already in the target, maybe later
+					add(existing[r.IntN(len(existing))].Text, "新", ago())
+				case 1: // duplicate inside the file
+					if len(fileTexts) > 0 {
+						add(fileTexts[r.IntN(len(fileTexts))], "复", ago())
+						continue
+					}
+					fallthrough
+				case 2: // equal timestamps
+					add(text(fmt.Sprintf("tie%d ", i)), "同", now.Add(-48*time.Hour).UnixMilli())
+				case 3: // the future
+					add(text(fmt.Sprintf("future%d ", i)), "未来", now.Add(72*time.Hour).UnixMilli())
+				case 4: // invalid
+					items = append(items, `{"text":"","created":1}`)
+				default:
+					add(text(fmt.Sprintf("new%d ", i)), "文件", ago())
+				}
+			}
+			path := importOf(t, "["+strings.Join(items, ",")+"]")
+			if err := to.History.SetRetention(policies[r.IntN(len(policies))]); err != nil {
+				t.Fatal(err)
+			}
+			before := historyTexts(t, to)
+			plan, err := to.PlanImport(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, err := to.Import(path, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if plan.New != result.New || plan.Existing != result.Existing || plan.Skipped != result.Skipped || plan.Invalid != result.Invalid || plan.Pruned != result.Pruned {
+				t.Fatalf("plan %+v, import %+v", plan, result)
+			}
+			after := map[string]bool{}
+			for _, x := range historyTexts(t, to) {
+				after[x] = true
+			}
+			was := map[string]bool{}
+			for _, x := range before {
+				was[x] = true
+			}
+			missing := 0
+			seen := map[string]bool{}
+			for _, x := range fileTexts {
+				if !was[x] && !seen[x] && !after[x] {
+					missing++
+				}
+				seen[x] = true
+			}
+			if plan.PrunedNew != missing {
+				t.Fatalf("PrunedNew %d, %d new texts missing", plan.PrunedNew, missing)
+			}
+		})
 	}
 }

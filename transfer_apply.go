@@ -142,6 +142,12 @@ func (s *Storage) importFile(path string, withSettings bool, beforeCommit func()
 		return ImportResult{}, fmt.Errorf("导入失败：%w，数据没有改动", err)
 	}
 	p.items = items
+	// One transaction holds the whole import, so the WAL grows to its size,
+	// and SQLite only shrinks it when the last connection closes. Truncate
+	// it now, while the locks keep writers out. Best effort: it never fails
+	// an import.
+	var busy, logFrames, checkpointed int
+	_ = db.db.QueryRow("PRAGMA wal_checkpoint(TRUNCATE)").Scan(&busy, &logFrames, &checkpointed)
 	if settings == nil {
 		return result, nil
 	}
