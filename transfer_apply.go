@@ -218,6 +218,6 @@ func importHistorySQL(tx *sql.Tx, f *importFile, privacy *privacyStore, now time
 	}
 	_, err = tx.Exec(`UPDATE history SET position=r.n FROM
 		(SELECT id, row_number() OVER (ORDER BY created DESC, position) AS n FROM history) AS r
-		WHERE r.id=history.id`)
+		WHERE r.id=history.id AND history.position <> r.n`)
 	return reindexed, err
 }

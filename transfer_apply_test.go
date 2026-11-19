@@ -11,10 +11,12 @@ import (
 
 func TestImportRoundTrip(t *testing.T) {
 	from := transferStorage(t)
+	texts := []Entry{entry(t, "文字"), entry(t, "https://example.com/a"), entry(t, "func main() {\n}")}
+	// Built after the texts, so creation order equals insertion order. The
+	// image is still waiting for recognition here, so its title matches the
+	// copy's, which waits too.
 	img := imageEntry(t, 30)
-	// The image is still waiting for recognition here, so its title matches
-	// the copy's, which waits too.
-	addEntries(t, from, entry(t, "文字"), entry(t, "https://example.com/a"), entry(t, "func main() {\n}"), img)
+	addEntries(t, from, append(texts, img)...)
 	savePhrases(t, from, "一", "二")
 	privacy := from.Privacy.Settings()
 	privacy.ClearSync, privacy.Ignore = false, []string{"^PIN"}
@@ -34,6 +36,10 @@ func TestImportRoundTrip(t *testing.T) {
 	got, _ := storedSnapshot(t, to.History)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatal("history differs", got, want)
+	}
+	var maxMiB, keepDays, maxEntries int
+	if err := to.History.db.db.QueryRow("SELECT max_mib, keep_days, max_entries FROM settings WHERE id=1").Scan(&maxMiB, &keepDays, &maxEntries); err != nil || maxMiB != 100 || keepDays != 0 || maxEntries != 0 {
+		t.Fatal("retention row", maxMiB, keepDays, maxEntries, err)
 	}
 	if imageTextStates(t, to.History.db.db)[img.ID] != ocrPending {
 		t.Fatal("the image isn't queued for recognition")
@@ -157,6 +163,7 @@ func TestImportFailureChangesNothing(t *testing.T) {
 	addEntries(t, from, entry(t, "新的"))
 	savePhrases(t, from, "新常用语")
 	from.History.SetRetention(RetentionPolicy{MaxEntries: 5})
+	from.History.SetImageText(false)
 	to := transferStorage(t)
 	addEntries(t, to, entry(t, "原来的"))
 	savePhrases(t, to, "原来的常用语")
@@ -170,6 +177,11 @@ func TestImportFailureChangesNothing(t *testing.T) {
 		!slices.Equal(phraseTexts(stored), []string{"原来的常用语"}) || to.Status().Retention != (RetentionPolicy{MaxMiB: 512}) ||
 		!reflect.DeepEqual(to.Privacy.Settings(), privacy) {
 		t.Fatal("the failed import left changes")
+	}
+	var maxMiB, keepDays, maxEntries int
+	var ocr bool
+	if err := to.History.db.db.QueryRow("SELECT max_mib, keep_days, max_entries, ocr_enabled FROM settings WHERE id=1").Scan(&maxMiB, &keepDays, &maxEntries, &ocr); err != nil || maxMiB != 512 || keepDays != 0 || maxEntries != 0 || !ocr || !to.Status().ImageText {
+		t.Fatal("settings row changed", maxMiB, keepDays, maxEntries, ocr, err)
 	}
 }
 
@@ -194,6 +206,24 @@ func TestImportCleanupMatchesThePlan(t *testing.T) {
 		}
 		if err != nil || result.Pruned != want {
 			t.Fatalf("settings %v: planned %d, pruned %d (%v)", imported, want, result.Pruned, err)
+		}
+		survivors := historyTexts(t, to)
+		wantSurvivors := []string{"新二", "中"}
+		if imported {
+			wantSurvivors = []string{"新二", "中", "新一", "旧三"}
+		}
+		if !slices.Equal(survivors, wantSurvivors) {
+			t.Fatalf("settings %v: survivors %v", imported, survivors)
+		}
+		lost := 0
+		for _, text := range []string{"旧一", "中", "旧三"} {
+			if !slices.Contains(survivors, text) {
+				lost++
+			}
+		}
+		// The plan only predicts how many imported entries go under the current policy.
+		if !imported && lost != plan.PrunedNew {
+			t.Fatalf("settings %v: %d of the file's entries gone, plan said %d", imported, lost, plan.PrunedNew)
 		}
 	}
 }
