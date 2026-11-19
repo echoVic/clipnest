@@ -199,12 +199,22 @@ func settingsGroup(c *ui.Context, name string, busy bool, fn func()) {
 	ui.Fieldset(c, name, fn).FillWidth().Margin(0).Padding(16, 18).Radius(14).Background(c.Theme().Surface).Disabled(busy)
 }
 
+// row lays out a setting: its name, the control at the right, and the
+// description under the name. A field's own description would sit under
+// the control, past the column of the name, so the row draws it and has
+// it describe the control.
 func (v *preferencesView) row(c *ui.Context, name, description string, control func()) {
-	ui.Form(c, func() {
-		ui.Field(c, name, func() {
-			ui.Row(c).FillWidth().Justify(ui.End).Children(control)
-		}).FillWidth().Description(description)
-	}).FillWidth()
+	ui.Column(c).FillWidth().Gap(4).Children(func() {
+		var field ui.Element
+		ui.Form(c, func() {
+			field = ui.Field(c, name, func() {
+				ui.Row(c).FillWidth().Justify(ui.End).Children(control)
+			}).FillWidth()
+		}).FillWidth()
+		if description != "" {
+			field.DescribedBy(ui.Text(c, description).FontSize(c.Theme().FontSize - 1).TextColor(c.Theme().TextMuted))
+		}
+	})
 }
 
 func (v *preferencesView) general(c *ui.Context) {

@@ -365,3 +365,41 @@ func TestPreferencesRetentionSavesTheEntryCount(t *testing.T) {
 		t.Fatal("count not saved", saved)
 	}
 }
+
+// A setting's description sits under its name, at the left, whatever the
+// width of the name and the control at the right, and still describes the
+// control.
+func TestPreferencesDescriptionsSitUnderTheirNames(t *testing.T) {
+	for _, c := range []struct {
+		tab                     int
+		name, description, role string
+	}{
+		{0, "登录时打开 Clipnest", "在后台运行，不弹出面板，用快捷键唤起。", "switch"},
+		{1, "暂停记录", "新的复制不保存，已有历史仍可使用。", "switch"},
+		{shortcutsTab, "唤起或收起面板", "点击快捷键修改。", "button"},
+	} {
+		v := settingsView()
+		v.tab = c.tab
+		v.actions.openAtLogin = func(bool) {}
+		v.actions.pause = func(bool) {}
+		v.actions.shortcut = func(string) {}
+		tt := ui.NewTester(v.draw, 620, 580)
+		name, ok := tt.Find(c.name)
+		desc, found := tt.Find(c.description)
+		if !ok || !found {
+			t.Fatal(c.name, ok, found, tt.Texts())
+		}
+		if desc.X != name.X || desc.Y <= name.Y {
+			t.Errorf("%s: description at %v, name at %v", c.name, desc, name)
+		}
+		var control ui.AccessInfo
+		if c.role == "switch" {
+			control, ok = tt.AccessByRole(ui.RoleSwitch, c.name)
+		} else {
+			control, ok = tt.AccessByRole(ui.RoleButton, "修改唤起快捷键")
+		}
+		if !ok || !strings.Contains(control.Description, c.description) {
+			t.Errorf("%s: control %+v", c.name, control)
+		}
+	}
+}
