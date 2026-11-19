@@ -48,6 +48,7 @@ type preferencesView struct {
 	keepDays          float64
 	maxEntries        float64
 	retentionDirty    bool
+	retentionShown    int
 	confirmClear      bool
 	confirmWinV       bool
 	winVTarget        bool
@@ -56,11 +57,24 @@ type preferencesView struct {
 	ignoreDraft       string
 }
 
+// retentionField keys a retention field by the times setState replaced the
+// fields' values (retentionShown). A NumberInput shows a value the app sets
+// one build late (MyGo 0.9 and 0.10), after an import replaced the policy
+// say; under a new key it's built afresh and shows the value at once.
+type retentionField struct {
+	name  string
+	shown int
+}
+
 func (v *preferencesView) setState(s PreferencesState) {
 	v.state = s
 	if !v.retentionDirty {
 		r := s.Storage.Retention
-		v.maxMiB, v.keepDays, v.maxEntries = float64(r.MaxMiB), float64(r.KeepDays), float64(r.MaxEntries)
+		shown := [3]float64{float64(r.MaxMiB), float64(r.KeepDays), float64(r.MaxEntries)}
+		if shown != [3]float64{v.maxMiB, v.keepDays, v.maxEntries} {
+			v.maxMiB, v.keepDays, v.maxEntries = shown[0], shown[1], shown[2]
+			v.retentionShown++
+		}
 	}
 	if rule := strings.TrimSpace(v.ignoreDraft); rule != "" && slices.Contains(s.Privacy.Ignore, rule) {
 		v.ignoreDraft = ""
@@ -444,17 +458,17 @@ func (v *preferencesView) storage(c *ui.Context) {
 	})
 	v.group(c, "历史保留策略", func() {
 		v.row(c, "历史内容容量(MiB)", "", func() {
-			if ui.NumberInput(c, &v.maxMiB, 0, 1<<20, 1).Width(180).Justify(ui.End).Disabled(v.state.Storage.Backend != "sqlite").Changed() {
+			if ui.NumberInput(c.Key(retentionField{"maxMiB", v.retentionShown}), &v.maxMiB, 0, 1<<20, 1).Width(180).Justify(ui.End).Disabled(v.state.Storage.Backend != "sqlite").Changed() {
 				v.retentionDirty = true
 			}
 		})
 		v.row(c, "保留天数", "", func() {
-			if ui.NumberInput(c, &v.keepDays, 0, 36500, 1).Width(180).Justify(ui.End).Disabled(v.state.Storage.Backend != "sqlite").Changed() {
+			if ui.NumberInput(c.Key(retentionField{"keepDays", v.retentionShown}), &v.keepDays, 0, 36500, 1).Width(180).Justify(ui.End).Disabled(v.state.Storage.Backend != "sqlite").Changed() {
 				v.retentionDirty = true
 			}
 		})
 		v.row(c, "最多保留条数", "", func() {
-			if ui.NumberInput(c, &v.maxEntries, 0, maxRetainedEntries, 1).Width(180).Justify(ui.End).Disabled(v.state.Storage.Backend != "sqlite").Changed() {
+			if ui.NumberInput(c.Key(retentionField{"maxEntries", v.retentionShown}), &v.maxEntries, 0, maxRetainedEntries, 1).Width(180).Justify(ui.End).Disabled(v.state.Storage.Backend != "sqlite").Changed() {
 				v.retentionDirty = true
 			}
 		})

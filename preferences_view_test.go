@@ -65,6 +65,52 @@ func TestPreferencesSwitchingTabsRetainsUnsavedRetention(t *testing.T) {
 	}
 }
 
+// An import can replace the retention policy while the storage page shows;
+// the fields show the new policy in the next frame, not after a tab switch.
+func TestPreferencesRetentionShowsAReplacedPolicyAtOnce(t *testing.T) {
+	v := settingsView()
+	v.tab = 2
+	tt := ui.NewTester(v.draw, 620, 580)
+	shown := func(label string) string {
+		a, ok := tt.AccessByRole(ui.RoleTextField, label)
+		if !ok {
+			t.Fatal("no field", label)
+		}
+		return a.Value
+	}
+	if got := shown("历史内容容量(MiB)"); got != "512" {
+		t.Fatal("stored size not shown", got)
+	}
+	s := v.state
+	s.Storage.Retention = RetentionPolicy{MaxMiB: 256, KeepDays: 90, MaxEntries: 1000}
+	v.setState(s)
+	tt.Frame()
+	for label, want := range map[string]string{"历史内容容量(MiB)": "256", "保留天数": "90", "最多保留条数": "1000"} {
+		if got := shown(label); got != want {
+			t.Errorf("%s shows %q, want %q", label, got, want)
+		}
+	}
+}
+
+// A refresh that leaves the policy alone keeps the field the user is in.
+func TestPreferencesRetentionKeepsFocusThroughARefresh(t *testing.T) {
+	v := settingsView()
+	v.tab = 2
+	tt := ui.NewTester(v.draw, 620, 580)
+	if err := tt.Click("历史内容容量(MiB)"); err != nil {
+		t.Fatal(err)
+	}
+	s := v.state
+	s.Appearance = mygo.ThemeDark
+	v.setState(s)
+	tt.Frame()
+	tt.Key(ui.Cmd, ui.KeyA)
+	tt.Type("128")
+	if v.maxMiB != 128 {
+		t.Fatal("the refresh took the focus from the field", v.maxMiB)
+	}
+}
+
 func TestPreferencesClearRequiresConfirmationAndEnterCancels(t *testing.T) {
 	v := settingsView()
 	v.tab = 2
