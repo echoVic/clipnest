@@ -1,0 +1,276 @@
+package main
+
+import (
+	"archive/zip"
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"runtime"
+	"unicode/utf8"
+)
+
+// importFile is an export file open for reading. Only the names of the
+// format are looked at; no other file is read.
+type importFile struct {
+	zr       *zip.ReadCloser
+	files    map[string]*zip.File
+	manifest exportManifest
+}
+
+// openImportFile opens path and checks its manifest. A file that isn't an
+// export, comes from a newer Clipnest or is damaged is refused.
+func openImportFile(path string) (*importFile, error) {
+	zr, err := zip.OpenReader(path)
+	if errors.Is(err, zip.ErrInsecurePath) {
+		err = nil // nothing is extracted, and such names are never read
+	}
+	if err != nil {
+		return nil, errNotExport
+	}
+	f := &importFile{zr: zr, files: map[string]*zip.File{}}
+	if err := f.index(); err != nil {
+		zr.Close()
+		return nil, err
+	}
+	return f, nil
+}
+
+func (f *importFile) Close() error { return f.zr.Close() }
+
+func (f *importFile) index() error {
+	if len(f.zr.File) > maxRetainedEntries+maxExtraFiles {
+		return damaged("文件数量超过上限")
+	}
+	for _, zf := range f.zr.File {
+		name := zf.Name
+		if name != manifestName && name != historyName && name != phrasesName && name != settingsName && !validImageName(name) {
+			continue
+		}
+		if f.files[name] != nil {
+			return damaged(name + " 出现了不止一次")
+		}
+		f.files[name] = zf
+	}
+	if f.files[manifestName] == nil {
+		return errNotExport
+	}
+	data, err := readZipFile(f.files[manifestName], maxManifestBytes)
+	if err == nil {
+		err = decodeExportJSON(data, &f.manifest)
+	}
+	if err != nil {
+		return damaged("manifest.json：" + err.Error())
+	}
+	switch {
+	case f.manifest.Format != exportFormat:
+		return errNotExport
+	case f.manifest.Version > exportVersion:
+		return errNewerExport
+	case f.manifest.Version < 1:
+		return damaged("版本无效")
+	case f.files[historyName] == nil || f.files[phrasesName] == nil:
+		return damaged("缺少 history.json 或 phrases.json")
+	}
+	return nil
+}
+
+var errTooLarge = errors.New("超过大小上限")
+
+// readZipFile reads a file of the ZIP, at most limit bytes whatever its
+// header says. Reading to the end also checks its checksum.
+func readZipFile(zf *zip.File, limit int64) ([]byte, error) {
+	r, err := zf.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+	data, err := io.ReadAll(io.LimitReader(r, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		return nil, fmt.Errorf("%s %w", zf.Name, errTooLarge)
+	}
+	return data, nil
+}
+
+// decodeExportJSON decodes exactly one document. encoding/json would
+// otherwise replace invalid UTF-8 with U+FFFD.
+func decodeExportJSON(data []byte, v any) error {
+	if !utf8.Valid(data) {
+		return errors.New("包含无效的 UTF-8")
+	}
+	dec := json.NewDecoder(bytes.NewReader(data))
+	if err := dec.Decode(v); err != nil {
+		return err
+	}
+	var extra json.RawMessage
+	if err := dec.Decode(&extra); err != io.EOF {
+		return errors.New("末尾有多余的内容")
+	}
+	return nil
+}
+
+var errItemTooLarge = errors.New("单条历史超过 4 MB")
+
+// limitedReader fails a read past limit, so one element can't grow the
+// decoder's buffer without bound.
+type limitedReader struct {
+	r        io.Reader
+	n, limit int64
+}
+
+func (l *limitedReader) Read(p []byte) (int, error) {
+	if l.n >= l.limit {
+		return 0, errItemTooLarge
+	}
+	if int64(len(p)) > l.limit-l.n {
+		p = p[:l.limit-l.n]
+	}
+	n, err := l.r.Read(p)
+	l.n += int64(n)
+	return n, err
+}
+
+// eachItem decodes history.json one element at a time and calls fn with
+// each, ok false for an element that isn't an item. Broken JSON, an element
+// over maxHistoryItemBytes or more than maxRetainedEntries elements make the
+// file damaged; an error from fn stops and is returned.
+func (f *importFile) eachItem(fn func(item exportItem, ok bool) error) error {
+	r, err := f.files[historyName].Open()
+	if err != nil {
+		return damaged("history.json：" + err.Error())
+	}
+	defer r.Close()
+	bad := func(err error) error { return damaged("history.json：" + err.Error()) }
+	in := &limitedReader{r: r, limit: maxHistoryItemBytes}
+	dec := json.NewDecoder(in)
+	if tok, err := dec.Token(); err != nil {
+		return bad(err)
+	} else if tok != json.Delim('[') {
+		return bad(errors.New("不是数组"))
+	}
+	for n := 0; ; n++ {
+		// Each element, and the space before it, gets the same allowance.
+		in.limit = dec.InputOffset() + maxHistoryItemBytes
+		if !dec.More() {
+			break
+		}
+		if n == maxRetainedEntries {
+			return bad(errors.New("超过 100 万条"))
+		}
+		var raw json.RawMessage
+		if err := dec.Decode(&raw); err != nil {
+			return bad(err)
+		}
+		var item exportItem
+		ok := utf8.Valid(raw) && json.Unmarshal(raw, &item) == nil
+		if err := fn(item, ok); err != nil {
+			return err
+		}
+	}
+	if tok, err := dec.Token(); err != nil {
+		return bad(err)
+	} else if tok != json.Delim(']') {
+		return bad(errors.New("不是数组"))
+	}
+	if _, err := dec.Token(); err != io.EOF {
+		return bad(errors.New("末尾有多余的内容"))
+	}
+	return nil
+}
+
+// entry checks an item the way a copy is checked and builds its entry. A
+// source that isn't valid UTF-8 or is too long is dropped; a time in the
+// future becomes now.
+func (f *importFile) entry(item exportItem, now int64) (Entry, error) {
+	if (item.Text == "") == (item.Image == "") {
+		return Entry{}, errors.New("条目要么是文字，要么是图片")
+	}
+	if item.Created <= 0 {
+		return Entry{}, errors.New("时间无效")
+	}
+	source := item.Source
+	if len(source) > maxSourceBytes || !utf8.ValidString(source) {
+		source = ""
+	}
+	var png []byte
+	if item.Image != "" {
+		zf := f.files[item.Image]
+		if !validImageName(item.Image) || zf == nil {
+			return Entry{}, errors.New("图片不在文件里")
+		}
+		var err error
+		if png, err = readZipFile(zf, maxImage); err != nil {
+			return Entry{}, err
+		}
+	}
+	e, err := newEntry(item.Text, png, source)
+	if err != nil {
+		return Entry{}, err
+	}
+	e.Created = min(item.Created, now)
+	return e, nil
+}
+
+// phrases reads the file's phrase texts. Each text is checked when it is
+// added; more than maxPhrases make the file damaged.
+func (f *importFile) phrases() ([]string, error) {
+	data, err := readZipFile(f.files[phrasesName], maxPhrasesBytes)
+	var p exportPhrases
+	if err == nil {
+		err = decodeExportJSON(data, &p)
+	}
+	if err != nil {
+		return nil, damaged("phrases.json：" + err.Error())
+	}
+	if len(p.Phrases) > maxPhrases {
+		return nil, damaged("常用语超过 500 条")
+	}
+	return p.Phrases, nil
+}
+
+// settings reads the file's settings, nil when it has none. check says
+// whether they can be imported.
+func (f *importFile) settings() (*exportSettings, error) {
+	zf := f.files[settingsName]
+	if zf == nil {
+		return nil, nil
+	}
+	data, err := readZipFile(zf, maxSettingsBytes)
+	var s exportSettings
+	if err == nil {
+		err = decodeExportJSON(data, &s)
+	}
+	if err != nil {
+		return nil, damaged("settings.json：" + err.Error())
+	}
+	s.Privacy = s.Privacy.clone() // a missing ignore list is an empty one
+	return &s, nil
+}
+
+// check says why the settings can't be imported here. Another platform's
+// shortcut and excluded apps aren't imported, so they aren't checked.
+func (s *exportSettings) check() error {
+	if err := s.Retention.validate(); err != nil {
+		return err
+	}
+	if _, err := s.Privacy.compile(); err != nil {
+		return err
+	}
+	if s.Platform == "" {
+		return errors.New("没有写明来自哪个平台")
+	}
+	if s.Platform != runtime.GOOS {
+		return nil
+	}
+	if s.Shortcut != "" {
+		if _, err := parseShortcutBinding(runtime.GOOS, s.Shortcut); err != nil {
+			return err
+		}
+	}
+	_, err := checkExcludedApps(s.ExcludedApps)
+	return err
+}

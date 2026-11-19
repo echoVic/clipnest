@@ -80,8 +80,21 @@ func openAppExclusions(path string) (*appExclusions, error) {
 	if config.Version != 1 || config.Apps == nil || len(config.Apps) > maxExcludedApps {
 		return nil, errors.New("排除应用配置版本或列表无效")
 	}
-	seen := make(map[string]bool, len(config.Apps))
-	for _, app := range config.Apps {
+	apps, err := checkExcludedApps(config.Apps)
+	if err != nil {
+		return nil, err
+	}
+	a.apps = apps
+	return a, nil
+}
+
+// checkExcludedApps validates a whole list and returns a sorted copy.
+func checkExcludedApps(apps []ExcludedApp) ([]ExcludedApp, error) {
+	if len(apps) > maxExcludedApps {
+		return nil, errors.New("最多排除 128 个应用")
+	}
+	seen := make(map[string]bool, len(apps))
+	for _, app := range apps {
 		if err := app.validate(); err != nil {
 			return nil, err
 		}
@@ -90,9 +103,9 @@ func openAppExclusions(path string) (*appExclusions, error) {
 		}
 		seen[app.BundleID] = true
 	}
-	a.apps = config.Apps
-	sortExcludedApps(a.apps)
-	return a, nil
+	next := append([]ExcludedApp{}, apps...)
+	sortExcludedApps(next)
+	return next, nil
 }
 
 func sortExcludedApps(apps []ExcludedApp) {
