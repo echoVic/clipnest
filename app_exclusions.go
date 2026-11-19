@@ -164,3 +164,17 @@ func (a *appExclusions) save(next []ExcludedApp) error {
 	}
 	return err
 }
+
+// Replace swaps in a whole list, as an import does.
+func (a *appExclusions) Replace(apps []ExcludedApp) error {
+	next, err := checkExcludedApps(apps)
+	if err != nil {
+		return err
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if slices.Equal(a.apps, next) {
+		return nil
+	}
+	return a.save(next)
+}

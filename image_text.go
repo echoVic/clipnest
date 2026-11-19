@@ -219,60 +219,64 @@ func (h *History) SetImageText(enabled bool) error {
 	if h.db == nil {
 		return errors.New("迁移到 SQLite 后可识别图片文字")
 	}
-	err := h.db.transaction(func(tx *sql.Tx) error {
-		var current bool
-		if err := tx.QueryRow("SELECT ocr_enabled FROM settings WHERE id=1").Scan(&current); err != nil || current == enabled {
-			return err
-		}
-		// Invalidate in-flight work under the same writer lock as its save.
-		// A failed settings transaction only causes a pending image to retry.
-		h.db.imageTextEpoch.Add(1)
-		if _, err := tx.Exec("UPDATE settings SET ocr_enabled=? WHERE id=1", enabled); err != nil {
-			return err
-		}
-		if enabled {
-			_, err := tx.Exec("UPDATE history SET ocr_state=? WHERE kind='image' AND width*height<=?", ocrPending, maxImageTextPixels)
-			return err
-		}
-		ids := []string{}
-		rows, err := tx.Query("SELECT id FROM history_ocr")
-		if err != nil {
-			return err
-		}
-		for rows.Next() {
-			var id string
-			if err = rows.Scan(&id); err != nil {
-				break
-			}
-			ids = append(ids, id)
-		}
-		if err == nil {
-			err = rows.Err()
-		}
-		rows.Close()
-		if err != nil {
-			return err
-		}
-		if len(ids) == 0 {
-			return nil
-		}
-		if _, err := tx.Exec("UPDATE history SET title=? WHERE id IN (SELECT id FROM history_ocr)", defaultImageTitle); err != nil {
-			return err
-		}
-		if _, err := tx.Exec("DELETE FROM history_ocr"); err != nil {
-			return err
-		}
-		for _, id := range ids {
-			if err := replaceSearchSQL(tx, id); err != nil {
-				return err
-			}
-		}
-		return purgeSearchSQL(tx)
-	})
+	err := h.db.transaction(func(tx *sql.Tx) error { return h.db.setImageTextSQL(tx, enabled) })
 	if err == nil {
 		h.db.imageText.Store(enabled)
 	}
 	return err
+}
+
+// setImageTextSQL turns recognition on or off in tx: on queues every
+// eligible image, off deletes the recognized text.
+func (s *sqliteStore) setImageTextSQL(tx *sql.Tx, enabled bool) error {
+	var current bool
+	if err := tx.QueryRow("SELECT ocr_enabled FROM settings WHERE id=1").Scan(&current); err != nil || current == enabled {
+		return err
+	}
+	// Invalidate in-flight work under the same writer lock as its save.
+	// A failed settings transaction only causes a pending image to retry.
+	s.imageTextEpoch.Add(1)
+	if _, err := tx.Exec("UPDATE settings SET ocr_enabled=? WHERE id=1", enabled); err != nil {
+		return err
+	}
+	if enabled {
+		_, err := tx.Exec("UPDATE history SET ocr_state=? WHERE kind='image' AND width*height<=?", ocrPending, maxImageTextPixels)
+		return err
+	}
+	ids := []string{}
+	rows, err := tx.Query("SELECT id FROM history_ocr")
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var id string
+		if err = rows.Scan(&id); err != nil {
+			break
+		}
+		ids = append(ids, id)
+	}
+	if err == nil {
+		err = rows.Err()
+	}
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	if _, err := tx.Exec("UPDATE history SET title=? WHERE id IN (SELECT id FROM history_ocr)", defaultImageTitle); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM history_ocr"); err != nil {
+		return err
+	}
+	for _, id := range ids {
+		if err := replaceSearchSQL(tx, id); err != nil {
+			return err
+		}
+	}
+	return purgeSearchSQL(tx)
 }
 
 func (s *sqliteStore) upgradeImageText() error {
