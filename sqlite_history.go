@@ -49,8 +49,8 @@ func insertEntrySQL(tx *sql.Tx, e Entry, position int64) error {
 	if imageTextEligible(e) {
 		state = ocrPending
 	}
-	_, err := tx.Exec(`INSERT INTO history(id,position,source,created,kind,title,excerpt,width,height,byte_size,source_search,ocr_state,secret,search_id)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,(SELECT coalesce(max(search_id),0)+1 FROM history))`, e.ID, position, e.Source, e.Created, e.Kind, e.Title, e.Excerpt, e.Width, e.Height, e.size(), strings.ToLower(e.Source), state, e.Secret)
+	_, err := tx.Exec(`INSERT INTO history(id,position,source,created,kind,title,excerpt,width,height,byte_size,source_search,ocr_state,secret,entry_pinned,search_id)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,(SELECT coalesce(max(search_id),0)+1 FROM history))`, e.ID, position, e.Source, e.Created, e.Kind, e.Title, e.Excerpt, e.Width, e.Height, e.size(), strings.ToLower(e.Source), state, e.Secret, e.EntryPinned)
 	if err != nil {
 		return err
 	}

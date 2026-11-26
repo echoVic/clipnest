@@ -7,6 +7,7 @@ import { DetailCache, DeferredPreview, PagedList, PAGE_SIZE, ScrollRenderQueue, 
 import { looksLikeMarkdown, renderMarkdown } from './markdown.js';
 import { preferencesTabs, preferencesExclusions, preferencesPrivacy } from './preferences.js';
 import { imageTextPreview, imageTextSetting } from './image-text.js';
+import { entryDialogs } from './entry-dialogs.js';
 
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -46,6 +47,7 @@ let restore = null, imageTextReady = null, menuReturnFocus = null;
 // The secret shown in full, as `${session}:${id}`. Selecting another entry or
 // closing the panel, which ends the session, masks it again.
 let revealed = '';
+let demoPasteAction = null;
 const listRange = () => {
   const list = $('#list'), total = pages.error ? 0 : pages.total;
   return { ...virtualRange(total, list.scrollTop, list.clientHeight || 280), total };
@@ -310,7 +312,7 @@ function render() {
   $('#empty').hidden = !!pages.total && !error;
   $('#list').setAttribute('aria-busy', queryPending);
   $('#list-label').textContent = filtered ? `${pages.total} 条匹配内容` : phrases ? '全部常用语' : '最近复制';
-  $('#list-order').textContent = phrases ? '按你的顺序' : '最新在前';
+  $('#list-order').textContent = phrases ? '按你的顺序' : '置顶优先 · 最新在前';
   emptyState(filtered);
   renderWindow();
   if (wheelPreview.pending) actionButtons(); else updatePreview();
@@ -337,7 +339,7 @@ function renderWindow(range = listRange()) {
       button.disabled = true; button.classList.add('entry-loading'); button.textContent = '正在加载…';
       missing.add(Math.floor(i / PAGE_SIZE) * PAGE_SIZE); continue;
     }
-    button.setAttribute('aria-label', phrases ? `${i + 1}，${e.excerpt}` : `${i + 1}，${e.title}，${e.secret || labels[e.kind] || '文字'}`);
+    button.setAttribute('aria-label', phrases ? `${i + 1}，${e.excerpt}` : `${i + 1}，${e.title}，${e.secret || labels[e.kind] || '文字'}${e.entryPinned ? '，已置顶' : ''}`);
     const glyph = phrases ? 'text' : e.secret ? 'lock' : e.kind;
     const type = node('span', `entry-icon ${e.secret && !phrases ? 'secret' : glyph}`); type.append(icon(glyph));
     const copy = node('span', 'entry-copy');
@@ -345,6 +347,7 @@ function renderWindow(range = listRange()) {
     else {
       copy.append(node('div', 'entry-title', e.title));
       const sub = node('span', 'entry-sub'); sub.append(node('span', 'source', e.source || labels[e.kind]), node('i', 'dot'), node('span', '', relativeTime(e.created)));
+      if (e.entryPinned) sub.prepend(node('span', '', '置顶'), node('i', 'dot'));
       copy.append(sub);
     }
     button.append(type, copy, node('kbd', '', i < 9 ? i + 1 : ''));
@@ -497,7 +500,7 @@ async function phrasePreview(entry, version) {
     $('#preview-meta').replaceChildren(node('span', '', `${characterCount(p.text)} 个字符`), actions);
   } catch (err) { if (version === detailVersion) toast(message(err)); }
 }
-async function choose(copyOnly, pick) {
+async function choose(copyOnly, pick, textAction) {
   if (blocked() || choosing) return;
   if (pick) {
     if (pick.index < 0 || pick.index >= pages.total || (pick.id && pages.entry(pick.index)?.id !== pick.id)) return;
@@ -513,7 +516,7 @@ async function choose(copyOnly, pick) {
       if (!pages.isCurrent(ticket) || blocked()) return;
       state.accessible = accessible; header();
       if (!accessible) {
-        if (demo) { $('#permission-dialog').showModal(); return; }
+        if (demo) { demoPasteAction = { ticket, textAction }; $('#permission-dialog').showModal(); return; }
         const decision = await call('PromptPastePermission', ticket.session);
         if (!pages.isCurrent(ticket) || blocked()) return;
         if (decision === 'settings') { await call('OpenPermission'); return; }
@@ -523,7 +526,10 @@ async function choose(copyOnly, pick) {
     }
     if (!pages.isCurrent(ticket) || blocked()) return;
     busy = dispatching = true; actionButtons();
-    const result = ticket.view === 'phrases' ? await call('InsertPhrase', ticket.session, ticket.id, copyOnly) : await call('Choose', ticket.session, ticket.id, copyOnly);
+    let result;
+    if (textAction?.ids) result = await call('MergeText', ticket.session, textAction.ids, textAction.separator, copyOnly);
+    else if (textAction?.mode) result = await call('ConvertCase', ticket.session, ticket.id, textAction.mode, copyOnly);
+    else result = await call(ticket.view === 'phrases' ? 'InsertPhrase' : 'Choose', ticket.session, ticket.id, copyOnly);
     if (demo && !copyOnly && !state.pinned) $('#panel').classList.add('dismissed');
     toast(result.message);
   } catch (err) { toast(message(err)); }
@@ -576,6 +582,24 @@ async function removeEntry() {
   } catch (err) { restore = null; toast(message(err)); }
   finally { busy = false; render(); }
 }
+async function toggleEntryPin() {
+  const entry = currentEntry(), session = state.session, q = $('#search').value, filter = kind;
+  if (view !== 'history' || blocked() || choosing || !entry) return;
+  busy = true; actionButtons();
+  try {
+    const { state: next, index } = await call('SetEntryPinned', session, q, filter, entry.id, !entry.entryPinned);
+    if (session === state.session && next.session === session) {
+      clearTimeout(reloadTimer);
+      reloadTimer = setTimeout(reloadHistory, 0);
+      toast('已保存置顶设置，正在刷新列表');
+      return;
+    }
+    if (session === state.session && next.session !== session && index >= 0) restore = { index, q, kind: filter };
+    applyState(next);
+    toast(entry.entryPinned ? '已取消置顶' : '已置顶这条记录');
+  } catch (err) { toast(message(err)); }
+  finally { busy = false; render(); }
+}
 // Phrases hold text only, at most 64 KB; the editor opens prefilled so the
 // text can be trimmed before it is kept.
 const MAX_PHRASE_BYTES = 64 << 10;
@@ -611,7 +635,7 @@ async function startSequence() {
     const ticket = await pages.pick();
     if (!pages.isCurrent(ticket) || blocked() || ticket.view !== 'history') return;
     await call('StartSequence', ticket.session, ticket.q, ticket.kind, ticket.index, ticket.id);
-    if (demo) toast(`演示：已开始顺序粘贴 ${ticket.index + 1} 条，桌面版每次 ⌘V 粘贴下一条`);
+    if (demo) toast('演示：已开始顺序粘贴，桌面版每次 ⌘V 粘贴下一条');
   } catch (err) { toast(message(err)); }
   finally { choosing = false; actionButtons(); }
 }
@@ -619,14 +643,19 @@ async function stopSequence() {
   try { applyState(await call('StopSequence')); toast('已停止顺序粘贴'); } catch (err) { toast(message(err)); }
 }
 $('#sequence-stop').onclick = stopSequence;
+const dialogs = entryDialogs({ call, context, currentEntry, blocked, choose, toast, message, selected: () => pages.selected });
 // Menu items and shortcuts share one dispatcher, so both behave the same.
 function perform(action) {
   switch (action.type) {
     case 'choose': choose(false); break;
     case 'copy': choose(true); break;
     case 'edit': editPhrase(); break;
+    case 'phrase-shortcut': dialogs.editShortcut(); break;
     case 'reorder': reorder(action.delta); break;
     case 'sequence': startSequence(); break;
+    case 'pin-entry': toggleEntryPin(); break;
+    case 'convert-case': choose(false, undefined, { mode: action.mode }); break;
+    case 'merge-text': dialogs.openMerge(); break;
     case 'save-phrase': saveAsPhrase(); break;
     case 'open-link': openLink(); break;
     case 'image-text': { const e = currentEntry(); if (e && imageTextReady === e.id) copyImageText(state.session, e.id); break; }
@@ -643,21 +672,35 @@ function toggleMenu() {
   const menu = $('#action-menu');
   if (menu.open) { menu.close(); return; }
   const entry = currentEntry(); if (!entry || blocked() || choosing) return;
+  const requested = context();
+  const desktopPaste = demo || state.platform === 'darwin' || state.platform === 'windows';
   const items = $('#action-menu-items'); items.replaceChildren();
-  for (const action of entryActions({ view, kind: entry.kind, secret: !!entry.secret, imageText: imageTextReady === entry.id, index: pages.selected, total: pages.total, hasQuery: !!$('#search').value, ctrl: ctrlPlatform(), sequence: demo || state.platform === 'darwin' || state.platform === 'windows' })) {
-    if (action.danger) { const line = node('div', 'menu-separator'); line.setAttribute('role', 'separator'); items.append(line); }
+  const makeMenuItem = action => {
     const item = node('button', `menu-item${action.danger ? ' menu-danger' : ''}`); item.type = 'button'; item.setAttribute('role', 'menuitem');
     item.append(node('span', '', action.label)); if (action.shortcut) item.append(node('kbd', '', action.shortcut));
     item.onclick = () => { menu.close(); perform(action); };
     // Like a native menu, one highlight follows both the pointer and the arrows.
     item.addEventListener('pointermove', () => { if (document.activeElement !== item) item.focus({ preventScroll: true }); });
-    items.append(item);
+    return item;
+  };
+  const actionContext = { view, kind: entry.kind, secret: !!entry.secret, entryPinned: entry.entryPinned, imageText: imageTextReady === entry.id, index: pages.selected, total: pages.total, hasQuery: !!$('#search').value, ctrl: ctrlPlatform(), phraseShortcuts: desktopPaste };
+  for (const action of entryActions(actionContext)) {
+    if (action.danger) { const line = node('div', 'menu-separator'); line.setAttribute('role', 'separator'); items.append(line); }
+    items.append(makeMenuItem(action));
   }
   // Open above the ⋯ button, or above the preview row before it renders.
   const anchor = ($('#preview-meta .more-actions') || $('#preview-meta')).getBoundingClientRect();
   menu.style.right = `${Math.max(8, innerWidth - anchor.right)}px`; menu.style.bottom = `${Math.max(8, innerHeight - anchor.top + 6)}px`;
   menuReturnFocus = document.activeElement;
   menu.showModal(); items.querySelector('.menu-item')?.focus();
+  if (desktopPaste && view === 'history' && pages.total > 1) {
+    const copyItem = items.children[1];
+    call('SequenceCount', requested.session, requested.revision, requested.q, requested.kind, entry.id).then(count => {
+      if (!menu.open || !copyItem.isConnected || requested.session !== state.session || requested.revision !== queryVersion) return;
+      const action = entryActions({ ...actionContext, sequence: count }).find(item => item.type === 'sequence');
+      if (action) copyItem.after(makeMenuItem(action));
+    }).catch(() => {});
+  }
 }
 function moveMenuFocus(delta) {
   const items = $$('#action-menu .menu-item'), current = items.indexOf(document.activeElement);
@@ -793,7 +836,12 @@ $('#permission-open').onclick = async () => { try { await call('OpenPermission')
 // native preferences window. The entry stays visible but disabled.
 $('#check-update').disabled = demo;
 $('#check-update').title = demo ? '浏览器演示；桌面版可检查更新' : '检查新版本';
-$('#permission-copy').onclick = () => { $('#permission-dialog').close(); choose(true); };
+$('#permission-copy').onclick = () => {
+  const action = demoPasteAction;
+  $('#permission-dialog').close();
+  if (action && pages.isCurrent(action.ticket)) choose(true, undefined, action.textAction);
+};
+$('#permission-dialog').addEventListener('close', () => { if (!$('#permission-dialog').open) demoPasteAction = null; });
 $('#reopen').onclick = async () => {
   invalidateSearch(); ++detailVersion; clearTimeout(queryTimer); queryScheduled = true;
   applyState(await call('State'), true);

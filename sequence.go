@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 )
 
@@ -16,26 +18,28 @@ const (
 // The whole queue is held in memory until it is pasted.
 var sequenceMaxBytes = 64 << 20
 
-// sequenceItems reads entries 1 to index+1 of the list the panel shows, the
-// selected one last, and returns them oldest first: the order they were copied.
 func sequenceItems(v *historyView, q, kind string, index int, id string) ([]Entry, error) {
-	if index < 1 {
-		return nil, errors.New("至少需要 2 条才能顺序粘贴")
-	}
-	if index >= sequenceMaxItems {
-		return nil, fmt.Errorf("顺序粘贴最多 %d 条，请从更近的一条开始", sequenceMaxItems)
-	}
-	page, err := v.Page(q, kind, 0, index+1)
+	selected, err := v.Page(q, kind, index, 1)
 	if err != nil {
 		return nil, err
 	}
-	if len(page.Entries) <= index || page.Entries[index].ID != id {
+	if len(selected.Entries) == 0 || selected.Entries[0].ID != id {
 		return nil, errors.New("列表已更新，请重新选择")
+	}
+	entries, index, err := sequenceRange(v.ctx, v, q, kind, id)
+	if err != nil {
+		return nil, err
+	}
+	if index < 0 {
+		return nil, fmt.Errorf("顺序粘贴最多 %d 条，请从更近的一条开始", sequenceMaxItems)
+	}
+	if index == 0 {
+		return nil, errors.New("至少需要 2 条才能顺序粘贴")
 	}
 	items := make([]Entry, 0, index+1)
 	size := 0
 	for i := index; i >= 0; i-- {
-		e, err := v.Detail(page.Entries[i].ID)
+		e, err := v.Detail(entries[i].ID)
 		if err != nil {
 			return nil, err
 		}
@@ -45,6 +49,15 @@ func sequenceItems(v *historyView, q, kind string, index int, id string) ([]Entr
 		items = append(items, e)
 	}
 	return items, nil
+}
+
+func sequenceRange(ctx context.Context, view *historyView, q, kind, id string) ([]Entry, int, error) {
+	page, err := view.page(ctx, q, kind, 0, sequenceMaxItems, true)
+	if err != nil {
+		return nil, -1, err
+	}
+	index := slices.IndexFunc(page.Entries, func(item Entry) bool { return item.ID == id })
+	return page.Entries, index, nil
 }
 
 // sequenceOps is everything a paste sequence asks of the system. Every call,

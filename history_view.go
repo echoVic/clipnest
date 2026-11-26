@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -82,7 +83,7 @@ func (v *historyView) Close() {
 }
 
 func (v *historyView) Page(q, kind string, offset, limit int) (HistoryPage, error) {
-	return v.page(v.ctx, q, kind, offset, limit)
+	return v.page(v.ctx, q, kind, offset, limit, false)
 }
 
 // Separate from the transaction mutex: a new query interrupts an old SQL scan
@@ -109,10 +110,10 @@ func (v *historyView) SearchPage(revision uint64, q, kind string, offset, limit 
 	if err != nil {
 		return HistoryPage{}, err
 	}
-	return v.page(ctx, q, kind, offset, limit)
+	return v.page(ctx, q, kind, offset, limit, false)
 }
 
-func (v *historyView) page(ctx context.Context, q, kind string, offset, limit int) (HistoryPage, error) {
+func (v *historyView) page(ctx context.Context, q, kind string, offset, limit int, chronological bool) (HistoryPage, error) {
 	page := HistoryPage{Entries: []Entry{}, Offset: offset}
 	if offset < 0 || limit < 1 || limit > 200 || len(q) > maxText {
 		return page, errors.New("分页参数无效")
@@ -136,13 +137,24 @@ func (v *historyView) page(ctx context.Context, q, kind string, offset, limit in
 	}
 	if v.tx == nil {
 		matches := queryEntries(v.legacy, q, kind)
+		if !chronological {
+			slices.SortStableFunc(matches, func(left, right Entry) int {
+				if left.EntryPinned == right.EntryPinned {
+					return 0
+				}
+				if left.EntryPinned {
+					return -1
+				}
+				return 1
+			})
+		}
 		page.Total = len(matches)
 		start := min(offset, page.Total)
 		page.Entries = matches[start:min(start+limit, page.Total)]
 		return page, nil
 	}
 	if q != "" {
-		return v.searchPage(ctx, q, kind, offset, limit)
+		return v.searchPage(ctx, q, kind, offset, limit, chronological)
 	}
 	from := " FROM history h"
 	where := " WHERE 1=1"
@@ -158,15 +170,15 @@ func (v *historyView) page(ctx context.Context, q, kind string, offset, limit in
 		v.lastQuery, v.lastKind, v.counted = q, kind, true
 	}
 	page.Total = v.lastTotal
-	rows, err := v.tx.QueryContext(ctx, `SELECT h.id,h.kind,h.title,h.excerpt,h.source,h.created,h.width,h.height,h.secret`+
-		from+where+" ORDER BY h.position LIMIT ? OFFSET ?", append(args, limit, offset)...)
+	rows, err := v.tx.QueryContext(ctx, `SELECT h.id,h.kind,h.title,h.excerpt,h.source,h.created,h.width,h.height,h.secret,h.entry_pinned`+
+		from+where+panelHistoryOrder(chronological)+" LIMIT ? OFFSET ?", append(args, limit, offset)...)
 	if err != nil {
 		return page, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var e Entry
-		if err := rows.Scan(&e.ID, &e.Kind, &e.Title, &e.Excerpt, &e.Source, &e.Created, &e.Width, &e.Height, &e.Secret); err != nil {
+		if err := rows.Scan(&e.ID, &e.Kind, &e.Title, &e.Excerpt, &e.Source, &e.Created, &e.Width, &e.Height, &e.Secret, &e.EntryPinned); err != nil {
 			return page, err
 		}
 		page.Entries = append(page.Entries, e)
@@ -222,10 +234,10 @@ func (v *historyView) Detail(id string) (Entry, error) {
 	var image []byte
 	var created int64
 	var state int
-	var enabled bool
-	err := v.tx.QueryRowContext(v.ctx, `SELECT c.text,c.image,h.source,h.created,h.ocr_state,coalesce(o.text,''),h.secret,
+	var enabled, pinned bool
+	err := v.tx.QueryRowContext(v.ctx, `SELECT c.text,c.image,h.source,h.created,h.ocr_state,coalesce(o.text,''),h.secret,h.entry_pinned,
 		(SELECT ocr_enabled FROM settings WHERE id=1) FROM history h`+searchDocumentJoin+` WHERE h.id=?`, id).Scan(
-		&text, &image, &source, &created, &state, &imageText, &secret, &enabled)
+		&text, &image, &source, &created, &state, &imageText, &secret, &pinned, &enabled)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Entry{}, errors.New("这条内容已移除")
 	}
@@ -240,6 +252,7 @@ func (v *historyView) Detail(id string) (Entry, error) {
 		return Entry{}, errors.New("历史内容与标识不一致")
 	}
 	e.Created = created
+	e.EntryPinned = pinned
 	e.remask(secret)
 	imageTextDetail(&e, state, imageText, enabled)
 	return e, nil

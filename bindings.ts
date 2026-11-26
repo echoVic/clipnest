@@ -18,6 +18,7 @@ export interface Entry {
   excerpt: string;
   source: string;
   created: number;
+  entryPinned?: boolean;
   text?: string;
   image?: string;
   width?: number;
@@ -91,6 +92,13 @@ export interface Phrase {
   excerpt?: string;
 }
 
+export interface PhraseShortcut {
+  slot: number;
+  label: string;
+  phraseID: string;
+  active: boolean;
+}
+
 export interface PrivacySettings {
   secrets: string;
   /** forget the last capture when the clipboard is cleared */
@@ -147,6 +155,9 @@ export const Desktop = {
   confirmClipboardPermission(): Promise<PanelState> {
     return call("Desktop.ConfirmClipboardPermission");
   },
+  convertCase(session: number, id: string, mode: string, copyOnly: boolean): Promise<PasteResult> {
+    return call("Desktop.ConvertCase", session, id, mode, copyOnly);
+  },
   /**
    * CopyImageText copies an image's recognized text the way InsertPhrase copies
    * a phrase, so the text does not become a history entry.
@@ -175,6 +186,9 @@ export const Desktop = {
    */
   insertPhrase(session: number, id: string, copyOnly: boolean): Promise<PasteResult> {
     return call("Desktop.InsertPhrase", session, id, copyOnly);
+  },
+  mergeText(session: number, ids: string[], separator: string, copyOnly: boolean): Promise<PasteResult> {
+    return call("Desktop.MergeText", session, ids, separator, copyOnly);
   },
   /**
    * The disk work runs off the AppKit thread. Busy keeps capture and delivery
@@ -219,6 +233,9 @@ export const Desktop = {
   },
   phraseDetail(id: string): Promise<Phrase> {
     return call("Desktop.PhraseDetail", id);
+  },
+  phraseShortcuts(): Promise<PhraseShortcut[]> {
+    return call("Desktop.PhraseShortcuts");
   },
   phrases(q: string): Promise<Phrase[]> {
     return call("Desktop.Phrases", q);
@@ -267,21 +284,28 @@ export const Desktop = {
   search(session: number, revision: number): Promise<void> {
     return call("Desktop.Search", session, revision);
   },
+  sequenceCount(session: number, revision: number, q: string, kind: string, id: string): Promise<number> {
+    return call("Desktop.SequenceCount", session, revision, q, kind, id);
+  },
   setAppearance(source: ThemeSource): Promise<void> {
     return call("Desktop.SetAppearance", source);
   },
+  setEntryPinned(session: number, q: string, kind: string, id: string, pinned: boolean): Promise<PanelReload> {
+    return call("Desktop.SetEntryPinned", session, q, kind, id, pinned);
+  },
   setImageText(enabled: boolean): Promise<PanelState> {
     return call("Desktop.SetImageText", enabled);
+  },
+  setPhraseShortcut(id: string, slot: number): Promise<void> {
+    return call("Desktop.SetPhraseShortcut", id, slot);
   },
   /** SetPinned pins or unpins the showing panel. Hiding the panel unpins it. */
   setPinned(session: number, pinned: boolean): Promise<PanelState> {
     return call("Desktop.SetPinned", session, pinned);
   },
   /**
-   * StartSequence queues the selected entry and every entry above it in the
-   * list the panel shows, then gives the keyboard back to the app the panel
-   * pastes into; a pinned panel stays up. Each ⌘V after that pastes the next
-   * one, starting with the selected entry, the oldest of them.
+   * StartSequence queues the selected entry and newer matches in copy order,
+   * then gives the keyboard back to the target app.
    */
   startSequence(session: number, q: string, kind: string, index: number, id: string): Promise<void> {
     return call("Desktop.StartSequence", session, q, kind, index, id);

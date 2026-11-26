@@ -212,6 +212,11 @@ func importHistorySQL(tx *sql.Tx, f *importFile, privacy *privacyStore, now time
 			seen[key] = true
 			result.Existing++
 		}
+		if e.EntryPinned {
+			if _, err := tx.Exec("UPDATE history SET entry_pinned=1 WHERE id=? AND entry_pinned=0", e.ID); err != nil {
+				return err
+			}
+		}
 		if e.Created <= created {
 			return nil
 		}

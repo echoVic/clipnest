@@ -16,7 +16,7 @@ import (
 // movedSettings are the JSON files a move copies along with the database.
 // The JSON history and phrases from before SQLite are not copied: once the
 // database is in use they are only left to clean up.
-var movedSettings = []string{"excluded-apps.json", "privacy.json", "shortcut.json"}
+var movedSettings = []string{"excluded-apps.json", "privacy.json", "shortcut.json", phraseShortcutFile}
 
 // moveOps are the steps tests make fail.
 type moveOps struct {

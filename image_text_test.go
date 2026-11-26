@@ -80,7 +80,7 @@ func TestImageTextSchemaQueuesImagesOnNewAndUpgradedDatabases(t *testing.T) {
 	// Reduce the database to the actual v3 schema, then reopen it.
 	_, err = s.db.Exec(`DROP INDEX history_ocr_queue; DROP TABLE history_ocr;
 		ALTER TABLE history DROP COLUMN ocr_state; ALTER TABLE settings DROP COLUMN ocr_enabled;
-		ALTER TABLE history DROP COLUMN secret; ALTER TABLE settings DROP COLUMN max_entries; PRAGMA user_version=3`)
+		ALTER TABLE history DROP COLUMN secret; ALTER TABLE settings DROP COLUMN max_entries; PRAGMA user_version=3;` + dropEntryPins)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -217,6 +217,7 @@ func (f *importFile) entry(item exportItem, now int64) (Entry, error) {
 		return Entry{}, err
 	}
 	e.Created = min(item.Created, now)
+	e.EntryPinned = item.EntryPinned
 	return e, nil
 }
 

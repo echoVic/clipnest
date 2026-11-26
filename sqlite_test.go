@@ -12,6 +12,8 @@ import (
 	"testing"
 )
 
+const dropEntryPins = `DROP INDEX history_pin_order; DROP INDEX history_kind_pin_order; ALTER TABLE history DROP COLUMN entry_pinned; `
+
 func storedSnapshot(t *testing.T, h *History) ([]Entry, bool) {
 	t.Helper()
 	if h.db == nil {

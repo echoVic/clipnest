@@ -32,6 +32,7 @@ type Entry struct {
 	Excerpt        string         `json:"excerpt"`
 	Source         string         `json:"source"`
 	Created        int64          `json:"created"`
+	EntryPinned    bool           `json:"entryPinned,omitempty"`
 	Text           string         `json:"text,omitempty"`
 	Image          []byte         `json:"image,omitempty"`
 	Width          int            `json:"width,omitempty"`
@@ -141,6 +142,7 @@ func openHistory(path string) (*History, error) {
 			return nil, fmt.Errorf("历史条目 %d 无效，原文件保持不变：%w", i+1, err)
 		}
 		e.Created = x.Created
+		e.EntryPinned = x.EntryPinned
 		e.remask(x.Secret)
 		h.addLocked(e)
 	}
@@ -152,6 +154,7 @@ func (h *History) addLocked(e Entry) {
 	size := e.size()
 	for _, old := range h.entries {
 		if old.ID == e.ID {
+			result[0].EntryPinned = e.EntryPinned || old.EntryPinned
 			continue
 		}
 		if len(result) >= maxItems || size+old.size() > maxBytes {

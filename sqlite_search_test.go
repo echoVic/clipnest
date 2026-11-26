@@ -132,7 +132,7 @@ func TestSQLiteV2SearchIndexUpgrade(t *testing.T) {
 	_, err = s.db.Exec(`DROP TRIGGER IF EXISTS history_search_delete; DROP TABLE IF EXISTS history_search;
 		DROP INDEX history_ocr_queue; DROP TABLE history_ocr; ALTER TABLE history DROP COLUMN ocr_state;
 		ALTER TABLE settings DROP COLUMN ocr_enabled; ALTER TABLE history DROP COLUMN secret; ALTER TABLE settings DROP COLUMN max_entries;
-		DROP INDEX IF EXISTS history_search_id; ALTER TABLE history DROP COLUMN search_id; PRAGMA user_version=2`)
+		DROP INDEX IF EXISTS history_search_id; ALTER TABLE history DROP COLUMN search_id; PRAGMA user_version=2;` + dropEntryPins)
 	if err != nil {
 		t.Fatal(err)
 	}

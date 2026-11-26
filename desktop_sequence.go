@@ -71,10 +71,23 @@ func (d *Desktop) sequenceRemaining() int {
 	return d.sequence.remaining()
 }
 
-// StartSequence queues the selected entry and every entry above it in the
-// list the panel shows, then gives the keyboard back to the app the panel
-// pastes into; a pinned panel stays up. Each ⌘V after that pastes the next
-// one, starting with the selected entry, the oldest of them.
+func (d *Desktop) SequenceCount(session, revision uint64, q, kind, id string) (int, error) {
+	var view *historyView
+	var err error
+	mygo.RunOnMain(func() { view, err = d.panelView(session) })
+	if err != nil {
+		return 0, err
+	}
+	ctx, err := view.searchContext(revision)
+	if err != nil {
+		return 0, err
+	}
+	_, index, err := sequenceRange(ctx, view, q, kind, id)
+	return index + 1, err
+}
+
+// StartSequence queues the selected entry and newer matches in copy order,
+// then gives the keyboard back to the target app.
 func (d *Desktop) StartSequence(session uint64, q, kind string, index int, id string) error {
 	var v *historyView
 	var err error

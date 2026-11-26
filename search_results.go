@@ -11,13 +11,14 @@ const maxCachedMatches = 16384
 const maxCachedSearches = 2
 
 type searchResult struct {
-	query string
-	kind  string
-	total int
-	ids   []int64
+	query         string
+	kind          string
+	chronological bool
+	total         int
+	ids           []int64
 }
 
-func searchSQL(q, kind string) (string, []any) {
+func searchSQL(q, kind string, chronological bool) (string, []any) {
 	if utf8.ValidString(q) && utf8.RuneCountInString(q) <= 3 {
 		g := searchGram{length: utf8.RuneCountInString(q)}
 		copy(g.runes[:], []rune(q))
@@ -32,7 +33,7 @@ func searchSQL(q, kind string) (string, []any) {
 			query += " AND h.kind=?"
 			args = append(args, kind)
 		}
-		return query + " ORDER BY h.position", args
+		return query + panelHistoryOrder(chronological), args
 	}
 	from := " FROM history h" + searchDocumentJoin
 	// Most hits are inside one field. Short-circuit there without copying a
@@ -50,24 +51,24 @@ func searchSQL(q, kind string) (string, []any) {
 		where += " AND history_search MATCH ?"
 		args = append(args, match)
 	}
-	return "SELECT h.search_id" + from + where + " ORDER BY h.position", args
+	return "SELECT h.search_id" + from + where + panelHistoryOrder(chronological), args
 }
 
 // A search scans candidates once, collecting only integer IDs. Small result
 // sets serve every subsequent page without reading text again. Huge matches
 // retain only their count, so content size/history length cannot grow RAM
 // without bound. Both paths retain the same exact order and total.
-func (v *historyView) searchPage(ctx context.Context, q, kind string, offset, limit int) (HistoryPage, error) {
+func (v *historyView) searchPage(ctx context.Context, q, kind string, offset, limit int, chronological bool) (HistoryPage, error) {
 	for i, result := range v.searches {
-		if result.query != q || result.kind != kind {
+		if result.query != q || result.kind != kind || result.chronological != chronological {
 			continue
 		}
 		v.searches = append(append(v.searches[:i:i], v.searches[i+1:]...), result)
 		if result.ids != nil {
 			start := min(offset, len(result.ids))
-			return v.searchSummaries(ctx, result.ids[start:min(start+limit, len(result.ids))], result.total, offset)
+			return v.searchSummaries(ctx, result.ids[start:min(start+limit, len(result.ids))], result.total, offset, chronological)
 		}
-		query, args := searchSQL(q, kind)
+		query, args := searchSQL(q, kind, chronological)
 		rows, err := v.tx.QueryContext(ctx, query+" LIMIT ? OFFSET ?", append(args, limit, offset)...)
 		if err != nil {
 			return HistoryPage{}, err
@@ -87,14 +88,18 @@ func (v *historyView) searchPage(ctx context.Context, q, kind string, offset, li
 		if err != nil {
 			return HistoryPage{}, err
 		}
-		return v.searchSummaries(ctx, ids, result.total, offset)
+		return v.searchSummaries(ctx, ids, result.total, offset, chronological)
 	}
-	query, args := searchSQL(q, kind)
+	query, args := searchSQL(q, kind, chronological)
+	if chronological {
+		query += " LIMIT ?"
+		args = append(args, sequenceMaxItems)
+	}
 	rows, err := v.tx.QueryContext(ctx, query, args...)
 	if err != nil {
 		return HistoryPage{}, err
 	}
-	result := searchResult{query: q, kind: kind, ids: []int64{}}
+	result := searchResult{query: q, kind: kind, chronological: chronological, ids: []int64{}}
 	pageIDs := []int64{}
 	for rows.Next() {
 		var id int64
@@ -127,10 +132,10 @@ func (v *historyView) searchPage(ctx context.Context, q, kind string, offset, li
 		v.searches[0] = searchResult{}
 		v.searches = v.searches[1:]
 	}
-	return v.searchSummaries(ctx, pageIDs, result.total, offset)
+	return v.searchSummaries(ctx, pageIDs, result.total, offset, chronological)
 }
 
-func (v *historyView) searchSummaries(ctx context.Context, ids []int64, total, offset int) (HistoryPage, error) {
+func (v *historyView) searchSummaries(ctx context.Context, ids []int64, total, offset int, chronological bool) (HistoryPage, error) {
 	page := HistoryPage{Entries: []Entry{}, Total: total, Offset: offset}
 	if len(ids) == 0 {
 		return page, ctx.Err()
@@ -140,15 +145,15 @@ func (v *historyView) searchSummaries(ctx context.Context, ids []int64, total, o
 		args[i] = id
 	}
 	marks := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
-	rows, err := v.tx.QueryContext(ctx, fmt.Sprintf(`SELECT id,kind,title,excerpt,source,created,width,height,secret
-		FROM history WHERE search_id IN (%s) ORDER BY position`, marks), args...)
+	rows, err := v.tx.QueryContext(ctx, fmt.Sprintf(`SELECT id,kind,title,excerpt,source,created,width,height,secret,entry_pinned
+		FROM history h WHERE search_id IN (%s)`, marks)+panelHistoryOrder(chronological), args...)
 	if err != nil {
 		return page, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var e Entry
-		if err := rows.Scan(&e.ID, &e.Kind, &e.Title, &e.Excerpt, &e.Source, &e.Created, &e.Width, &e.Height, &e.Secret); err != nil {
+		if err := rows.Scan(&e.ID, &e.Kind, &e.Title, &e.Excerpt, &e.Source, &e.Created, &e.Width, &e.Height, &e.Secret, &e.EntryPinned); err != nil {
 			return page, err
 		}
 		page.Entries = append(page.Entries, e)

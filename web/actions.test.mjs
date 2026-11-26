@@ -1,7 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { entryActions, sequenceBanner } from './actions.js';
-const types = ctx => entryActions({ view: 'history', kind: 'text', imageText: false, index: 0, total: 3, hasQuery: false, ctrl: false, ...ctx }).map(a => a.type);
+test('entry pin actions describe the selected history item', () => {
+ const action = ctx => entryActions({ view: 'history', kind: 'image', index: 0, total: 1, ...ctx }).find(a => a.type === 'pin-entry');
+ assert.equal(action({}).label, '置顶这条');
+ assert.equal(action({ entryPinned: true }).label, '取消置顶');
+ assert.equal(action({ view: 'phrases' }), undefined);
+});
+const additionalHistoryActions = ['pin-entry', 'convert-case', 'merge-text'];
+const types = ctx => entryActions({ view: 'history', kind: 'text', imageText: false, index: 0, total: 3, hasQuery: false, ctrl: false, ...ctx }).map(a => a.type).filter(type => !additionalHistoryActions.includes(type));
+test('text actions respect the history item type and privacy', () => {
+ const actions = ctx => entryActions({ view: 'history', kind: 'text', total: 2, ...ctx });
+ assert.deepEqual(actions({}).filter(a => a.type === 'convert-case').map(a => a.mode), ['upper', 'lower']);
+ assert.ok(actions({ kind: 'link' }).some(a => a.type === 'merge-text'));
+ for (const ctx of [{ secret: true }, { kind: 'image' }, { view: 'phrases' }]) {
+  assert.ok(!actions(ctx).some(a => a.type === 'convert-case' || a.type === 'merge-text'));
+ }
+});
 test('history actions follow the entry kind', () => {
  assert.deepEqual(types({}), ['choose', 'copy', 'save-phrase', 'delete']);
  assert.deepEqual(types({ kind: 'code' }), ['choose', 'copy', 'save-phrase', 'delete']);
@@ -32,19 +47,20 @@ test('only delete is destructive and it comes last', () => {
  assert.equal(entryActions({ view: 'history', kind: 'text', index: 0, total: 1 }).at(-1).label, '删除');
 });
 test('shortcut hints match the platform', () => {
- const hints = ctrl => Object.fromEntries(entryActions({ view: 'history', kind: 'link', index: 0, total: 1, ctrl }).map(a => [a.type, a.shortcut]));
+ const hints = ctrl => Object.fromEntries(entryActions({ view: 'history', kind: 'link', index: 0, total: 1, ctrl }).filter(a => a.type !== 'pin-entry').map(a => [a.type, a.shortcut]));
  assert.deepEqual(hints(false), { choose: '↩', copy: '⌘ ↩', 'save-phrase': '⌘ S', 'open-link': '⌘ O', delete: '⌘ ⌫' });
  assert.deepEqual(hints(true), { choose: '↩', copy: 'Ctrl ↩', 'save-phrase': 'Ctrl S', 'open-link': 'Ctrl O', delete: 'Delete' });
  const phrase = ctrl => Object.fromEntries(entryActions({ view: 'phrases', index: 1, total: 3, ctrl }).map(a => [`${a.type}${a.delta ?? ''}`, a.shortcut]));
  assert.deepEqual(phrase(false), { choose: '↩', copy: '⌘ ↩', edit: '⌘ E', 'reorder-1': '⌥ ↑', reorder1: '⌥ ↓', delete: '⌘ ⌫' });
  assert.deepEqual(phrase(true), { choose: '↩', copy: 'Ctrl ↩', edit: 'Ctrl E', 'reorder-1': 'Alt ↑', reorder1: 'Alt ↓', delete: 'Delete' });
 });
-test('sequential paste starts from a history entry below the top', () => {
- const sequence = ctx => entryActions({ view: 'history', kind: 'text', index: 2, total: 5, ctrl: false, sequence: true, ...ctx }).find(a => a.type === 'sequence');
+test('sequential paste is available even when an older item is pinned above newer entries', () => {
+ const sequence = ctx => entryActions({ view: 'history', kind: 'text', index: 2, total: 5, ctrl: false, sequence: 3, ...ctx }).find(a => a.type === 'sequence');
  assert.deepEqual(sequence({}), { type: 'sequence', label: '从这条起顺序粘贴（3 条）', shortcut: '' });
- assert.deepEqual(types({ index: 2, sequence: true }), ['choose', 'copy', 'sequence', 'save-phrase', 'delete']);
- assert.equal(sequence({ index: 1, kind: 'image' }).label, '从这条起顺序粘贴（2 条）', 'images can be queued');
- assert.equal(sequence({ index: 0 }), undefined, 'the top entry alone is just a paste');
+ assert.deepEqual(types({ index: 2, sequence: 3 }), ['choose', 'copy', 'sequence', 'save-phrase', 'delete']);
+ assert.equal(sequence({ index: 1, kind: 'image', sequence: 2 }).label, '从这条起顺序粘贴（2 条）', 'images can be queued');
+ assert.ok(sequence({ index: 0, entryPinned: true }));
+ assert.equal(sequence({ index: 0, total: 1, sequence: 1 }), undefined);
  assert.equal(sequence({ sequence: false }), undefined, 'platforms without auto-paste');
  assert.equal(sequence({ view: 'phrases' }), undefined);
 });

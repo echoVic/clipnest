@@ -88,7 +88,7 @@ func TestRetentionCountColumnOnUpgradedDatabases(t *testing.T) {
 		t.Fatal("new database is not the current version", version, err)
 	}
 	// Reduce the database to the actual v5 schema, then reopen it.
-	if _, err := s.db.Exec("UPDATE settings SET max_mib=64; ALTER TABLE settings DROP COLUMN max_entries; PRAGMA user_version=5"); err != nil {
+	if _, err := s.db.Exec(dropEntryPins + "UPDATE settings SET max_mib=64; ALTER TABLE settings DROP COLUMN max_entries; PRAGMA user_version=5"); err != nil {
 		t.Fatal(err)
 	}
 	s.db.Close()

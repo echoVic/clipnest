@@ -204,14 +204,15 @@ func writeExport(w io.Writer, tx *sql.Tx, settings exportSettings, opts exportOp
 	if _, err := io.WriteString(fw, "["); err != nil {
 		return sum, err
 	}
-	rows, err = tx.Query("SELECT h.id, h.kind, h.source, h.created, h.secret, c.text FROM history h JOIN history_content c ON c.id=h.id ORDER BY h.position")
+	rows, err = tx.Query("SELECT h.id, h.kind, h.source, h.created, h.secret, c.text, h.entry_pinned FROM history h JOIN history_content c ON c.id=h.id ORDER BY h.position")
 	if err != nil {
 		return sum, err
 	}
 	for rows.Next() {
 		var id, kind, source, secret, text string
 		var created int64
-		if err = rows.Scan(&id, &kind, &source, &created, &secret, &text); err != nil {
+		var pinned bool
+		if err = rows.Scan(&id, &kind, &source, &created, &secret, &text, &pinned); err != nil {
 			break
 		}
 		if sensitive(kind, text, secret) {
@@ -220,9 +221,9 @@ func writeExport(w io.Writer, tx *sql.Tx, settings exportSettings, opts exportOp
 				continue
 			}
 		}
-		item := exportItem{Text: text, Source: source, Created: created}
+		item := exportItem{Text: text, Source: source, Created: created, EntryPinned: pinned}
 		if kind == "image" {
-			item = exportItem{Image: imageName(id), Source: source, Created: created}
+			item.Text, item.Image = "", imageName(id)
 			sum.Images++
 		}
 		if sum.History > 0 {

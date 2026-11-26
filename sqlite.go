@@ -19,7 +19,7 @@ const databaseAppID = 0x434c504e
 
 // schemaVersion is the user_version of a current database. Opening an older
 // one upgrades it step by step; a newer one is refused.
-const schemaVersion = 6
+const schemaVersion = 7
 
 // sqliteFileURI turns an OS filesystem path into a SQLite file URI. A bare
 // Windows "C:\…" path otherwise parses as an "C:" authority and fails; the
@@ -77,7 +77,7 @@ func openSQLite(path string, create bool) (*sqliteStore, error) {
 					kind TEXT NOT NULL, title TEXT NOT NULL, excerpt TEXT NOT NULL,
 					width INTEGER NOT NULL, height INTEGER NOT NULL, byte_size INTEGER NOT NULL,
 					source_search TEXT NOT NULL, ` + imageTextStateColumn + `,
-					` + secretColumn + `
+					` + secretColumn + `, ` + entryPinnedColumn + `
 				);
 				CREATE INDEX history_order ON history(position);
 				CREATE INDEX history_kind_order ON history(kind, position);
@@ -98,7 +98,7 @@ func openSQLite(path string, create bool) (*sqliteStore, error) {
 					` + maxEntriesColumn + `
 				);
 				INSERT INTO settings(id, paused) VALUES (1, 0);
-			` + searchSchema + imageTextSchema)
+			` + searchSchema + imageTextSchema + entryPinIndexes)
 			return err
 		})
 	} else {
@@ -124,6 +124,9 @@ func openSQLite(path string, create bool) (*sqliteStore, error) {
 		}
 		if err == nil && version < 6 {
 			err = s.upgradeMaxEntries()
+		}
+		if err == nil && version < 7 {
+			err = s.upgradeEntryPins()
 		}
 	}
 	if err == nil {
@@ -180,14 +183,14 @@ func (s *sqliteStore) load() (archive, []Phrase, error) {
 	if err := s.db.QueryRow("SELECT paused FROM settings WHERE id = 1").Scan(&a.Paused); err != nil {
 		return a, nil, err
 	}
-	rows, err := s.db.Query(`SELECT h.id, c.text, c.image, h.source, h.created, h.secret
+	rows, err := s.db.Query(`SELECT h.id, c.text, c.image, h.source, h.created, h.secret, h.entry_pinned
 		FROM history h LEFT JOIN history_content c ON h.id = c.id ORDER BY h.position`)
 	if err != nil {
 		return a, nil, err
 	}
 	for rows.Next() {
 		var e Entry
-		if err = rows.Scan(&e.ID, &e.Text, &e.Image, &e.Source, &e.Created, &e.Secret); err != nil {
+		if err = rows.Scan(&e.ID, &e.Text, &e.Image, &e.Source, &e.Created, &e.Secret, &e.EntryPinned); err != nil {
 			break
 		}
 		var valid Entry
@@ -200,6 +203,7 @@ func (s *sqliteStore) load() (archive, []Phrase, error) {
 			break
 		}
 		valid.Created = e.Created
+		valid.EntryPinned = e.EntryPinned
 		valid.remask(e.Secret)
 		a.Entries = append(a.Entries, valid)
 	}

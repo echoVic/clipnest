@@ -129,6 +129,22 @@ func (d *Desktop) SetPinned(session uint64, pinned bool) (s PanelState, err erro
 	return
 }
 
+func (d *Desktop) SetEntryPinned(session uint64, q, kind, id string, pinned bool) (PanelReload, error) {
+	var view *historyView
+	var err error
+	mygo.RunOnMain(func() { view, err = d.panelView(session) })
+	if err == nil {
+		err = view.Contains(id)
+	}
+	if err != nil {
+		return PanelReload{}, err
+	}
+	if _, err := d.mutateHistory(session, func() error { return d.h.SetEntryPinned(id, pinned) }, false); err != nil {
+		return PanelReload{}, err
+	}
+	return d.Reload(session, q, kind, id)
+}
+
 // trackTarget follows the app a pinned panel pastes into as the user
 // switches apps, and shows its name in the panel when it changes.
 func (d *Desktop) trackTarget() {

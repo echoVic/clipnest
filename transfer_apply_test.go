@@ -22,6 +22,9 @@ func TestImportRoundTrip(t *testing.T) {
 	// copy's, which waits too.
 	img := imageEntry(t, 30)
 	addEntries(t, from, append(texts, img)...)
+	if err := from.History.SetEntryPinned(texts[0].ID, true); err != nil {
+		t.Fatal(err)
+	}
 	savePhrases(t, from, "一", "二")
 	privacy := from.Privacy.Settings()
 	privacy.ClearSync, privacy.Ignore = false, []string{"^PIN"}

@@ -49,10 +49,11 @@ type exportManifest struct {
 // exportItem is one history entry: text, or the name of its image. The
 // rest of an entry is derived again on import.
 type exportItem struct {
-	Text    string `json:"text,omitempty"`
-	Image   string `json:"image,omitempty"`
-	Source  string `json:"source"`
-	Created int64  `json:"created"`
+	Text        string `json:"text,omitempty"`
+	Image       string `json:"image,omitempty"`
+	Source      string `json:"source"`
+	Created     int64  `json:"created"`
+	EntryPinned bool   `json:"entryPinned,omitempty"`
 }
 
 type exportPhrases struct {

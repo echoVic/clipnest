@@ -156,5 +156,21 @@
 <dialog id="phrase-editor" class="phrase-editor" aria-labelledby="phrase-editor-title"><div class="dialog-top"><h2 id="phrase-editor-title">新建常用语</h2></div><textarea id="phrase-text" aria-label="常用语内容" spellcheck="false" placeholder="输入或粘贴要反复使用的文字…"></textarea><p id="phrase-error" class="field-error" role="alert" hidden></p><div class="confirm-actions"><span class="editor-hint"><kbd>⌘ ↩</kbd> 保存</span><button id="phrase-cancel" class="secondary">取消</button><button id="phrase-save" class="primary">保存</button></div></dialog>
 <dialog id="confirm-discard" aria-labelledby="discard-title"><div class="dialog-top"><h2 id="discard-title">放弃修改？</h2></div><p>刚才输入的内容不会保存。</p><div class="confirm-actions"><button id="keep-editing" class="secondary">继续编辑</button><button id="discard-phrase" class="danger">放弃</button></div></dialog>
 <dialog id="action-menu" class="action-menu" aria-label="更多操作"><div id="action-menu-items" role="menu" aria-label="更多操作"></div></dialog>
+<dialog id="phrase-shortcut-dialog" aria-labelledby="phrase-shortcut-title">
+  <div class="dialog-top"><h2 id="phrase-shortcut-title">常用语全局快捷键</h2></div>
+  <p>在目标应用里按下快捷键，即可粘贴这条常用语。macOS 需要辅助功能权限。</p>
+  <label class="dialog-field">快捷键 <select id="phrase-shortcut-slot" autofocus></select></label>
+  <p id="phrase-shortcut-error" class="field-error" role="alert" hidden></p>
+  <div class="confirm-actions"><button class="secondary close-dialog">取消</button><button id="phrase-shortcut-save" class="primary">保存</button></div>
+</dialog>
+<dialog id="merge-text-dialog" aria-labelledby="merge-text-title">
+  <div class="dialog-top"><h2 id="merge-text-title">合并粘贴</h2></div>
+  <p>按勾选顺序合并 2–20 条文字。</p>
+  <div id="merge-candidates" class="merge-candidates" role="group" aria-label="可选历史条目"></div>
+  <div class="merge-pages"><button id="merge-prev" class="secondary">上一页</button><span id="merge-page"></span><button id="merge-next" class="secondary">下一页</button></div>
+  <label class="dialog-field">分隔方式 <select id="merge-separator"><option value="newline">换行</option><option value="blank">空一行</option><option value="space">空格</option></select></label>
+  <p id="merge-status" aria-live="polite"></p>
+  <div class="confirm-actions"><button class="secondary close-dialog">取消</button><button id="merge-submit" class="primary">粘贴</button></div>
+</dialog>
 <dialog id="confirm-phrase-delete" aria-labelledby="phrase-delete-title"><div class="dialog-top"><h2 id="phrase-delete-title">删除这条常用语？</h2></div><p>删除后无法恢复，不影响剪贴板和复制历史。</p><div class="confirm-actions"><button class="secondary close-dialog">保留</button><button id="confirm-phrase-delete-button" class="danger">删除</button></div></dialog>
 </body></html>

@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 )
 
@@ -99,6 +100,9 @@ func main() {
 	d := &Desktop{h: h, p: store.Phrases, storage: store, lastRevision: -2, stop: make(chan struct{}),
 		shortcutPath: shortcutPath, shortcutAccelerator: shortcutAccelerator,
 		data: dataDirInfo{dir: dir, defaultDir: defaultDir, fixed: choice.fixed, notice: data.notice}}
+	if phraseAccelerator(runtime.GOOS, 1) != "" {
+		d.deleteBoundPhrase = d.deletePhraseAndShortcut
+	}
 	if shortcutErr != nil {
 		log.Print("快捷键配置读取失败：", shortcutErr)
 		d.shortcutNotice = shortcutConfigNotice(shortcutErr)

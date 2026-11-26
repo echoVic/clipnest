@@ -103,6 +103,15 @@ dialog{padding:25px;border-radius:17px;border:1px solid var(--line);background:v
 .setting-switch:focus-visible{outline:2px solid var(--accent-strong);outline-offset:3px}
 @media(max-width:480px){.preferences-content{padding:18px 14px}.settings-group{padding:14px}#preferences .setting-row{gap:12px}#preferences .setting-row select{min-width:130px}#preferences .retention-fields input{width:100px}}
 .permission-dialog{width:520px;max-height:calc(100dvh - 24px);padding:0;overflow:hidden}
+#merge-text-dialog{max-height:calc(100dvh - 24px);overflow:auto}
+.dialog-field,.merge-pages{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:10px 0}
+.dialog-field select{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 9px}
+.merge-candidates{min-height:64px;max-height:min(38vh,220px);overflow-y:auto;border:1px solid var(--line);border-radius:8px;padding:6px}
+.merge-candidates label{display:flex;align-items:center;gap:6px;padding:5px;border-radius:4px}
+.merge-candidates label:focus-within,.merge-candidates label:hover{background:var(--soft)}
+.merge-candidates input{accent-color:var(--accent-strong)}
+.merge-label{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.merge-position,.merge-pages span{color:var(--muted)}
 .permission-dialog[open]{display:flex;flex-direction:column}
 .permission-content{padding:18px 24px;overflow-y:auto;min-height:0;scrollbar-width:thin;scrollbar-color:var(--thumb) transparent}
 .permission-intro{text-align:center;margin-bottom:18px}

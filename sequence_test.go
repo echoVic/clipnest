@@ -374,11 +374,22 @@ func TestSequenceItemsRejectStaleOrOversizedQueues(t *testing.T) {
 		"selection moved": {2, page.Entries[1].ID, "列表已更新，请重新选择"},
 		"past the end":    {3, page.Entries[2].ID, "列表已更新，请重新选择"},
 		"first entry":     {0, page.Entries[0].ID, "至少需要 2 条才能顺序粘贴"},
-		"too many":        {sequenceMaxItems, page.Entries[2].ID, "顺序粘贴最多 100 条，请从更近的一条开始"},
 	} {
 		if _, err := sequenceItems(v, "", "", c.index, c.id); err == nil || err.Error() != c.want {
 			t.Errorf("%s: %v", name, err)
 		}
+	}
+	many := make([]string, sequenceMaxItems+1)
+	for index := range many {
+		many[index] = fmt.Sprintf("entry %d", index)
+	}
+	large := sequenceView(t, many...)
+	last, err := large.Page("", "", sequenceMaxItems, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sequenceItems(large, "", "", sequenceMaxItems, last.Entries[0].ID); err == nil || err.Error() != "顺序粘贴最多 100 条，请从更近的一条开始" {
+		t.Fatal(err)
 	}
 	if sequenceMaxItems != 100 || sequenceMaxBytes != 64<<20 {
 		t.Fatal(sequenceMaxItems, sequenceMaxBytes)

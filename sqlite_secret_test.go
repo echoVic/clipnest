@@ -36,7 +36,7 @@ func TestSecretColumnOnNewAndUpgradedDatabases(t *testing.T) {
 		t.Fatal("secret type not stored", label, err)
 	}
 	// Reduce the database to the actual v4 schema, then reopen it.
-	if _, err := s.db.Exec("ALTER TABLE history DROP COLUMN secret; ALTER TABLE settings DROP COLUMN max_entries; PRAGMA user_version=4"); err != nil {
+	if _, err := s.db.Exec(dropEntryPins + "ALTER TABLE history DROP COLUMN secret; ALTER TABLE settings DROP COLUMN max_entries; PRAGMA user_version=4"); err != nil {
 		t.Fatal(err)
 	}
 	s.db.Close()

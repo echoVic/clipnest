@@ -72,6 +72,9 @@ type Desktop struct {
 	shortcutAccelerator   string
 	shortcutPath          string
 	shortcutNotice        string
+	phraseKeys            phraseShortcutConfig
+	phraseKeysActive      [3]bool
+	deleteBoundPhrase     func(string) error
 	winVNotice            string
 	data                  dataDirInfo
 	winVRegistered        bool
@@ -241,6 +244,10 @@ func (d *Desktop) SetImageText(enabled bool) (PanelState, error) {
 }
 
 func (d *Desktop) changeHistory(session uint64, change func() error) (s PanelState, err error) {
+	return d.mutateHistory(session, change, true)
+}
+
+func (d *Desktop) mutateHistory(session uint64, change func() error, reload bool) (s PanelState, err error) {
 	started := false
 	mygo.RunOnMain(func() {
 		if d.busy || d.quitting {
@@ -259,7 +266,7 @@ func (d *Desktop) changeHistory(session uint64, change func() error) (s PanelSta
 	err = change()
 	mygo.RunOnMain(func() {
 		d.busy = false
-		if err == nil && !d.quitting && d.win.IsVisible() {
+		if reload && err == nil && !d.quitting && d.win.IsVisible() {
 			s = d.reload()
 		} else {
 			s = d.snapshot()
@@ -279,10 +286,24 @@ func (d *Desktop) Choose(session uint64, id string, copyOnly bool) (PasteResult,
 // deliver copies e and, unless copyOnly, pastes it into the app the panel was
 // opened from. Recording the clipboard revision keeps capture from re-adding it.
 func (d *Desktop) deliver(e Entry, copyOnly bool, session uint64) (result PasteResult, err error) {
+	return d.deliverTo(e, copyOnly, session, nil)
+}
+
+func (d *Desktop) deliverTo(e Entry, copyOnly bool, session uint64, shortcut *phrasePasteTarget) (result PasteResult, err error) {
 	var target targetApp
+	var revision int64
 	started, pinned := false, false
+	copyEntry := func() error {
+		if err := writeClipboard(e); err != nil {
+			return err
+		}
+		revision = d.n.Revision()
+		d.lastRevision, d.lastID = revision, e.ID
+		result.Copied = true
+		return nil
+	}
 	mygo.RunOnMain(func() {
-		if session != d.session || !d.win.IsVisible() || d.quitting {
+		if d.quitting || (shortcut == nil && (session != d.session || !d.win.IsVisible())) {
 			err = errors.New("面板已更新，请重新选择")
 			return
 		}
@@ -294,21 +315,32 @@ func (d *Desktop) deliver(e Entry, copyOnly bool, session uint64) (result PasteR
 			err = errors.New("允许辅助功能后即可自动粘贴，也可以使用「仅复制」")
 			return
 		}
-		d.trackTarget()
-		if err = writeClipboard(e); err != nil {
-			return
+		if shortcut == nil {
+			d.trackTarget()
+			target = d.target
+		} else {
+			target = shortcut.target
+			if d.phraseKeys.Slots[shortcut.slot-1] != shortcut.id || !d.phraseKeysActive[shortcut.slot-1] ||
+				d.win.IsFocused() || d.n.Target() != target {
+				err = errors.New("粘贴目标已改变")
+				return
+			}
 		}
-		d.lastRevision = d.n.Revision()
-		d.lastID = e.ID
-		result.Copied = true
-		if copyOnly || !d.n.autoPaste() || d.target.PID == 0 {
+		if shortcut == nil {
+			if err = copyEntry(); err != nil {
+				return
+			}
+		}
+		if copyOnly || !d.n.autoPaste() || target.PID == 0 {
 			result.Message = "已复制，返回目标应用即可粘贴"
 			return
 		}
 		d.busy = true
 		started = true
-		target, pinned = d.target, d.pinned
-		d.leavePanel(target)
+		pinned = d.pinned
+		if shortcut == nil {
+			d.leavePanel(target)
+		}
 	})
 	if err != nil || !started {
 		return
@@ -326,6 +358,14 @@ func (d *Desktop) deliver(e Entry, copyOnly bool, session uint64) (result PasteR
 			// A pinned panel stays up; never post the paste to it.
 			ready = d.n.ReadyToPaste(target) && !(pinned && d.win.IsFocused())
 			if ready {
+				if shortcut != nil {
+					if err = copyEntry(); err != nil {
+						return
+					}
+				} else if d.n.Revision() != revision {
+					err = errors.New("剪贴板内容已更改，已取消粘贴")
+					return
+				}
 				// A running sequence holds ⌘V; let this one through.
 				if d.sequence != nil {
 					d.sequence.release()
@@ -340,13 +380,18 @@ func (d *Desktop) deliver(e Entry, copyOnly bool, session uint64) (result PasteR
 	}
 	mygo.RunOnMain(func() {
 		d.busy = false
-		if !result.Pasted {
+		if err != nil {
+			d.notice = err.Error()
+		} else if !result.Copied {
+			err = errors.New("粘贴目标已改变，或快捷键尚未松开")
+			d.notice = err.Error()
+		} else if !result.Pasted {
 			d.notice = "内容已复制，未能自动粘贴。请返回原应用按 " + manualPasteHint() + "。"
-			if d.tray != nil {
-				d.tray.SetToolTip("Clipnest · " + d.notice)
-			}
 		} else {
 			d.notice = ""
+		}
+		if d.notice != "" && d.tray != nil {
+			d.tray.SetToolTip("Clipnest · " + d.notice)
 		}
 	})
 	if result.Pasted {
@@ -360,8 +405,13 @@ func (d *Desktop) deliver(e Entry, copyOnly bool, session uint64) (result PasteR
 func (d *Desktop) Phrases(q string) ([]Phrase, error)         { return d.p.List(q) }
 func (d *Desktop) PhraseDetail(id string) (Phrase, error)     { return d.p.Get(id) }
 func (d *Desktop) SavePhrase(id, text string) (Phrase, error) { return d.p.Save(id, text) }
-func (d *Desktop) DeletePhrase(id string) error               { return d.p.Delete(id) }
-func (d *Desktop) MovePhrase(id string, delta int) error      { return d.p.Move(id, delta) }
+func (d *Desktop) DeletePhrase(id string) error {
+	if d.deleteBoundPhrase != nil {
+		return d.deleteBoundPhrase(id)
+	}
+	return d.p.Delete(id)
+}
+func (d *Desktop) MovePhrase(id string, delta int) error { return d.p.Move(id, delta) }
 
 // InsertPhrase pastes a phrase the way Choose pastes an entry. newEntry yields
 // the ID capture would compute, so the write never lands in history.

@@ -83,7 +83,8 @@ export function createDemo({ version = '开发版', accessible = true, legacySto
   let privacy = checkPrivacy({ secrets: 'mask', clearSync: true, ignore: [] });
   const status = () => ({ ...storage, retention: { ...storage.retention } });
   let sequence = 0, pinned = false;
-  const state = () => ({ session, loading, total: entries.length, entries: loading ? [] : entries.slice(0, 50).map(summary), paused, clipboardAccess, accessible, version, target: '备忘录', platform: 'demo', notice: '', shortcut: '⌘ ⇧ V', storage: status(), sequence, pinned });
+  const phraseSlots = ['', '', ''];
+  const state = () => ({ session, loading, total: entries.length, entries: loading ? [] : matching('', 'all').slice(0, 50).map(summary), paused, clipboardAccess, accessible, version, target: '备忘录', platform: 'demo', notice: '', shortcut: '⌘ ⇧ V', storage: status(), sequence, pinned });
   const emit = () => { for (const fn of listeners) fn(state()); };
   const fresh = (publishLoading = false) => {
     session++; revision = 0; loading = true; clearTimeout(readyTimer);
@@ -97,7 +98,10 @@ export function createDemo({ version = '开发版', accessible = true, legacySto
     if (next < revision) throw Error('搜索已过期');
     revision = next;
   };
-  const matching = (q, kind) => entries.filter(e => (kind === 'all' || e.kind === kind) && searchable(e).toLowerCase().includes(q.toLowerCase().trim()));
+  const matching = (q, kind, chronological = false) => {
+    const matches = entries.filter(e => (kind === 'all' || e.kind === kind) && searchable(e).toLowerCase().includes(q.toLowerCase().trim()));
+    return chronological ? matches : matches.sort((left, right) => Number(!!right.entryPinned) - Number(!!left.entryPinned));
+  };
   const historyEntry = id => { const e = entries.find(e => e.id === id); if (!e) throw Error('这条记录已删除'); return e; };
   return {
     on(event, fn) { if (event === 'clipnest:panel') listeners.add(fn); return () => listeners.delete(fn); },
@@ -161,15 +165,38 @@ export function createDemo({ version = '开发版', accessible = true, legacySto
         storage = { ...storage, imageText: !!args[0] };
         return fresh();
       case 'Choose': checkSession(args[0]); historyEntry(args[1]); return { copied: false, pasted: false, message: args[2] ? '演示：内容已选中，未更改系统剪贴板' : '演示：已选择粘贴，未发送系统按键' };
+      case 'SequenceCount': {
+        checkSession(args[0]);
+        checkRevision(args[1]);
+        const index = matching(args[2], args[3], true).slice(0, 100).findIndex(e => e.id === args[4]);
+        return index + 1;
+      }
+      case 'ConvertCase': {
+        checkSession(args[0]);
+        const entry = historyEntry(args[1]);
+        if (entry.secret || !['text', 'code'].includes(entry.kind)) throw Error('只能转换未遮罩的文字或代码');
+        const text = args[2] === 'upper' ? entry.text.toUpperCase() : entry.text.toLowerCase();
+        return { copied: false, pasted: false, message: `演示：${[...text].slice(0, 70).join('')}` };
+      }
+      case 'MergeText': {
+        checkSession(args[0]);
+        const items = args[1].map(historyEntry);
+        const separator = { newline: '\n', blank: '\n\n', space: ' ' }[args[2]];
+        if (!separator || items.length < 2 || items.length > 20 || new Set(items).size !== items.length || items.some(e => e.kind === 'image' || e.secret)) throw Error('请选择 2–20 条不同的未遮罩文字');
+        const text = items.map(e => e.text).join(separator);
+        return { copied: false, pasted: false, message: `演示：已按勾选顺序合并 ${items.length} 条，共 ${[...text].length} 字符` };
+      }
       // The demo only counts the queue; it never takes over ⌘V.
       case 'StartSequence': {
         const [id, q, kind, index, entryID] = args;
         checkSession(id);
-        if (!Number.isSafeInteger(index) || index < 1) throw Error('至少需要 2 条才能顺序粘贴');
-        if (index >= 100) throw Error('顺序粘贴最多 100 条，请从更近的一条开始');
+        if (!Number.isSafeInteger(index) || index < 0) throw Error('无效的选择');
         const matches = matching(q, kind);
         if (matches[index]?.id !== entryID) throw Error('列表已更新，请重新选择');
-        sequence = index + 1;
+        const chronologicalIndex = matching(q, kind, true).findIndex(e => e.id === entryID);
+        if (chronologicalIndex < 1) throw Error('至少需要 2 条才能顺序粘贴');
+        if (chronologicalIndex >= 100) throw Error('顺序粘贴最多 100 条，请从更近的一条开始');
+        sequence = chronologicalIndex + 1;
         emit();
         return null;
       }
@@ -196,15 +223,40 @@ export function createDemo({ version = '开发版', accessible = true, legacySto
         return { state: state(), index: entryID ? matching(q, kind).findIndex(e => e.id === entryID) : -1 };
       }
       case 'SetPinned': checkSession(args[0]); pinned = !!args[1]; return state();
+      case 'SetEntryPinned': {
+        const [current, q, kind, id, entryPinned] = args;
+        checkSession(current);
+        historyEntry(id);
+        entries = entries.map(e => e.id === id ? { ...e, entryPinned: !!entryPinned } : e);
+        session++; revision = 0;
+        return { state: state(), index: matching(q, kind).findIndex(e => e.id === id) };
+      }
       case 'Phrases': return phrases.filter(p => p.text.toLowerCase().includes(args[0].toLowerCase().trim())).map(p => ({ id: p.id, excerpt: excerpt(p.text) }));
       case 'PhraseDetail': return { ...phrase(args[0]) };
+      case 'PhraseShortcuts': return phraseSlots.map((phraseID, index) => ({ slot: index + 1, label: `⌘ ⌃ ${index + 1}`, phraseID, active: !!phraseID }));
+      case 'SetPhraseShortcut': {
+        const [id, slot] = args;
+        phrase(id);
+        if (!Number.isInteger(slot) || slot < 0 || slot > 3) throw Error('无效的常用语快捷键');
+        if (slot && phraseSlots[slot - 1] && phraseSlots[slot - 1] !== id) throw Error('该快捷键已绑定另一条常用语');
+        const previous = phraseSlots.indexOf(id);
+        if (previous >= 0) phraseSlots[previous] = '';
+        if (slot) phraseSlots[slot - 1] = id;
+        return null;
+      }
       case 'SavePhrase': {
         const [id, text] = args; checkPhrase(text);
         if (id) { phrase(id); phrases = phrases.map(p => p.id === id ? { id, text } : p); return { id, text }; }
         if (phrases.length >= 500) throw new Error('常用语最多 500 条');
         const added = { id: `phrase-${nextPhrase++}`, text }; phrases = [...phrases, added]; return { ...added };
       }
-      case 'DeletePhrase': phrase(args[0]); phrases = phrases.filter(p => p.id !== args[0]); return null;
+      case 'DeletePhrase': {
+        phrase(args[0]);
+        phrases = phrases.filter(p => p.id !== args[0]);
+        const slot = phraseSlots.indexOf(args[0]);
+        if (slot >= 0) phraseSlots[slot] = '';
+        return null;
+      }
       case 'MovePhrase': {
         if (args[1] !== -1 && args[1] !== 1) throw new Error('无效的移动');
         const i = phrases.indexOf(phrase(args[0])), j = i + args[1];
